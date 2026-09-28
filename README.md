@@ -51,6 +51,56 @@ Remixa は Apple Developer ID での署名を行っていない（ad-hoc 署名�
   xattr -dr com.apple.quarantine /Applications/Remixa.app
   ```
 
+## AI連携（Claude Code / Codex）
+
+Remixa には `remixa` コマンドラインツールが同梱されています（`Remixa.app/Contents/Helpers/remixa`）。Remixa アプリと Unix ドメインソケット（`~/Library/Application Support/Remixa/control.sock`）経由の JSON-RPC で通信し、アプリが起動していなければ自動的に起動して待機します。CLI としても、Claude Code や Codex から使う MCP（Model Context Protocol）サーバとしても動作します。
+
+### CLI としてインストール
+
+```sh
+/Applications/Remixa.app/Contents/Helpers/remixa install-cli
+```
+
+`/usr/local/bin` または `~/.local/bin` に `remixa` へのシンボリックリンクを作成します。以後はそのまま `remixa` コマンドとして使えます。
+
+### CLI 使用例
+
+```sh
+remixa status                          # アプリの状態を表示（未起動なら自動起動）
+remixa open ~/Music/song.remixa        # プロジェクトを開く
+remixa add ~/Music/vocal.wav --track "Vocal"  # トラックに音声を追加
+remixa bpm 128                         # BPM を設定
+remixa play                            # 再生
+remixa stop                            # 停止
+remixa seek 12.5                       # 12.5 秒にシーク
+remixa export ~/Desktop/mix.wav        # ミックスを書き出し
+remixa analyze ~/Music/loop.wav        # 音声ファイルを解析
+remixa state                           # プロジェクト全体の状態を JSON で取得
+remixa call track.update '{"trackId":"...","volume":0.8}'  # 任意の RPC を直接呼ぶ
+```
+
+### Claude Code から使う
+
+```sh
+claude mcp add remixa -- /Applications/Remixa.app/Contents/Helpers/remixa mcp
+```
+
+登録後は Claude Code の会話の中で「BPM を 128 にして」「トラックにボーカルを追加して」のように指示すると、Remixa アプリを直接操作できます。
+
+### Codex から使う
+
+`~/.codex/config.toml` に以下を追加します。
+
+```toml
+[mcp_servers.remixa]
+command = "/Applications/Remixa.app/Contents/Helpers/remixa"
+args = ["mcp"]
+```
+
+### アプリ内 AI アシスタントについて
+
+Remixa アプリ自体にも AI アシスタント機能があり、アプリ内のチャットからこれと同じ操作（トラック追加、BPM 変更、エフェクト調整、書き出しなど）を指示できます。`remixa mcp` / `remixa call` は同じ制御ソケットを外部の AI エージェント（Claude Code や Codex）から利用するための窓口です。
+
 ## アップデート
 
 Remixa は起動時に自動的にアップデートを確認します（[Sparkle](https://sparkle-project.org/) を使用）。メニューの「Remixa」→「アップデートを確認…」からも手動で確認できます。

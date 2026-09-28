@@ -3,7 +3,8 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var project: RemixaProject
-    @StateObject private var timelineEngine = TimelineEngine()
+    @EnvironmentObject var timelineEngine: TimelineEngine
+    @State private var showAIPanel = false
     @State private var showExportSheet = false
     @State private var isDropTargeted = false
 
@@ -21,11 +22,19 @@ struct ContentView: View {
                     .foregroundStyle(.red)
                     .padding(6)
             }
-            TimelineView(engine: timelineEngine)
-                .environmentObject(project)
-                .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-                    handleDropOnEmptyArea(providers: providers)
+            HStack(spacing: 0) {
+                TimelineView(engine: timelineEngine)
+                    .environmentObject(project)
+                    .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                        handleDropOnEmptyArea(providers: providers)
+                    }
+                if showAIPanel {
+                    Divider()
+                    AIAssistantPanel()
+                        .frame(width: 340)
+                        .transition(.move(edge: .trailing))
                 }
+            }
         }
         .onAppear {
             timelineEngine.attach(project: project)
@@ -88,6 +97,11 @@ struct ContentView: View {
                 Label("ミックスを書き出し", systemImage: "square.and.arrow.up")
             }
             .disabled(project.projectDuration <= 0)
+            Button {
+                withAnimation { showAIPanel.toggle() }
+            } label: {
+                Label("AIアシスタント", systemImage: "sparkles")
+            }
         }
         .padding()
     }

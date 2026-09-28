@@ -10,22 +10,35 @@
 		046CC90BF64354A2D2A3DAAE /* TrackLaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */; };
 		1496F4243D247F3ED90C7D21 /* TimelineExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */; };
 		1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */; };
+		1EE1CFC68372589279094742 /* JSONHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0688366C616C30695A03178A /* JSONHelpers.swift */; };
 		275D46005C2FD3B118E30F0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */; };
+		27A4393CDA31BD0292A3E640 /* MCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02AAD189A1D3E57B8DC78C39 /* MCPServer.swift */; };
 		280F44151296B1BC993F9DEB /* WaveformGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */; };
 		2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D9346376D4E5E57D923510 /* AudioEngineController.swift */; };
+		30E4772B746A84AE9D523873 /* AIAssistantPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B182F34B5A98FE171BD63ADF /* AIAssistantPanel.swift */; };
+		32903C496A2DE9FA8FF31029 /* AIAssistantRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62E928164D16D95C51CF525 /* AIAssistantRunner.swift */; };
 		3A8C827820CEC1D31313B878 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E01BC02B0DC524332C889FA /* Project.swift */; };
 		3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 776C82119C39B6D31D0BDC69 /* AudioExporter.swift */; };
 		496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */; };
+		4B01023B34460794BAE49E6D /* SocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958479F13A5D595DE22C431 /* SocketClient.swift */; };
+		4ED2FFD8EBF012B46191840C /* ControlConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E813D3676DA68F21596C10 /* ControlConnection.swift */; };
 		5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */; };
+		5160269E1C0A30986EBE8EAF /* ControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BD5C33C1BAB7077A6BCD0A /* ControlServer.swift */; };
+		5631DC120192D9AC29EB811B /* RemixaCLI in Resources */ = {isa = PBXBuildFile; fileRef = 22020D84CCFB026BD145F5DB /* RemixaCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5D7322F841C10AA69ACC6FC8 /* ControlMethods.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1507354ED19115E59B87B4E /* ControlMethods.swift */; };
 		6856F1C014614AE634167121 /* TimelineExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */; };
 		6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */; };
+		75BA10ACD1C19953303B7A25 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8574F27DE8A51C130C335C1 /* main.swift */; };
 		7CBC31772F8E33D8782A62A5 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */; };
 		8012945FAE09D62584B13D26 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85A360B3B18F2E9CB4D5672 /* ContentView.swift */; };
 		8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */; };
+		859E6043D2CC5C7FC7DBD191 /* AIBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = C26C291AF189C29945A0E29E /* AIBackend.swift */; };
 		8F120F5062EAD1736F6243B8 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B343FADECE68CADAB245E88 /* TimelineView.swift */; };
+		9DFD353FC6C556E06F7BCBA9 /* ControlJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBCF5147AC6B9924E7C6F4F2 /* ControlJSON.swift */; };
 		9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870CB2266F8CF72C322C812D /* RemixaApp.swift */; };
 		A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13754590A106AAAFCE1A319E /* EffectsRackView.swift */; };
 		B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE149128022845371FDB2EA /* ExportView.swift */; };
+		BC0C92E13600DD617068BECD /* AppLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F2309084ECC89E52783E32 /* AppLauncher.swift */; };
 		CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */; };
 		D2609537D8C281327F21D241 /* TrackHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */; };
 		DDB073E17731142C649360D2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CE8E5ADAEA4AC28B405184B2 /* Sparkle */; };
@@ -34,9 +47,23 @@
 		FE7BB2E59D8FB210570205D7 /* TransportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516CFB7F305482893D941A0B /* TransportView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		534D63F8444B0608B967E92D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 79540AAF042DB6D8E515661C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A0ACB2C324C9C6B8D825F3D5;
+			remoteInfo = RemixaCLI;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		02AAD189A1D3E57B8DC78C39 /* MCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServer.swift; sourceTree = "<group>"; };
+		0688366C616C30695A03178A /* JSONHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONHelpers.swift; sourceTree = "<group>"; };
 		0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		13754590A106AAAFCE1A319E /* EffectsRackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackView.swift; sourceTree = "<group>"; };
+		22020D84CCFB026BD145F5DB /* RemixaCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = RemixaCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		28E813D3676DA68F21596C10 /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
 		2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformGenerator.swift; sourceTree = "<group>"; };
 		2DE149128022845371FDB2EA /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDocumentIO.swift; sourceTree = "<group>"; };
@@ -53,12 +80,21 @@
 		94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackLaneView.swift; sourceTree = "<group>"; };
 		9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMEstimator.swift; sourceTree = "<group>"; };
+		A958479F13A5D595DE22C431 /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
 		AD70612A795902A7351612D0 /* EffectsRackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackSettings.swift; sourceTree = "<group>"; };
+		B1507354ED19115E59B87B4E /* ControlMethods.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlMethods.swift; sourceTree = "<group>"; };
+		B182F34B5A98FE171BD63ADF /* AIAssistantPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantPanel.swift; sourceTree = "<group>"; };
+		C26C291AF189C29945A0E29E /* AIBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIBackend.swift; sourceTree = "<group>"; };
+		C8574F27DE8A51C130C335C1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		CDEC93DED112C5871F59C6A4 /* Remixa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Remixa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3D9346376D4E5E57D923510 /* AudioEngineController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineController.swift; sourceTree = "<group>"; };
 		D6BEF61FA61CD60D31420288 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
+		DBCF5147AC6B9924E7C6F4F2 /* ControlJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlJSON.swift; sourceTree = "<group>"; };
+		E2F2309084ECC89E52783E32 /* AppLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLauncher.swift; sourceTree = "<group>"; };
 		E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsGraph.swift; sourceTree = "<group>"; };
 		EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineExportView.swift; sourceTree = "<group>"; };
+		F62E928164D16D95C51CF525 /* AIAssistantRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantRunner.swift; sourceTree = "<group>"; };
+		F6BD5C33C1BAB7077A6BCD0A /* ControlServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlServer.swift; sourceTree = "<group>"; };
 		F85A360B3B18F2E9CB4D5672 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -74,9 +110,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0239DCFA6D6154F5ECC6134F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				E2F2309084ECC89E52783E32 /* AppLauncher.swift */,
+				0688366C616C30695A03178A /* JSONHelpers.swift */,
+				C8574F27DE8A51C130C335C1 /* main.swift */,
+				02AAD189A1D3E57B8DC78C39 /* MCPServer.swift */,
+				A958479F13A5D595DE22C431 /* SocketClient.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 		1F36BED6CAA4F55BE9BED4EA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				B182F34B5A98FE171BD63ADF /* AIAssistantPanel.swift */,
 				7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */,
 				F85A360B3B18F2E9CB4D5672 /* ContentView.swift */,
 				13754590A106AAAFCE1A319E /* EffectsRackView.swift */,
@@ -100,6 +149,14 @@
 			path = Effects;
 			sourceTree = "<group>";
 		};
+		77F92D2CFAEDB15D5CB26691 /* RemixaCLI */ = {
+			isa = PBXGroup;
+			children = (
+				0239DCFA6D6154F5ECC6134F /* Sources */,
+			);
+			path = RemixaCLI;
+			sourceTree = "<group>";
+		};
 		AB38862C01CC972EC3F23026 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -112,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				E5D138B20E07F8D3A8DCA5D9 /* Remixa */,
+				77F92D2CFAEDB15D5CB26691 /* RemixaCLI */,
 				BDEAC699DD4FFEFDAEDE1CD7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,16 +178,39 @@
 			isa = PBXGroup;
 			children = (
 				CDEC93DED112C5871F59C6A4 /* Remixa.app */,
+				22020D84CCFB026BD145F5DB /* RemixaCLI */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E22BB2C170D98302D66B66F3 /* Control */ = {
+			isa = PBXGroup;
+			children = (
+				28E813D3676DA68F21596C10 /* ControlConnection.swift */,
+				DBCF5147AC6B9924E7C6F4F2 /* ControlJSON.swift */,
+				B1507354ED19115E59B87B4E /* ControlMethods.swift */,
+				F6BD5C33C1BAB7077A6BCD0A /* ControlServer.swift */,
+			);
+			path = Control;
+			sourceTree = "<group>";
+		};
+		E53F06950213F1666C3453A7 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				F62E928164D16D95C51CF525 /* AIAssistantRunner.swift */,
+				C26C291AF189C29945A0E29E /* AIBackend.swift */,
+			);
+			path = AI;
 			sourceTree = "<group>";
 		};
 		E5D138B20E07F8D3A8DCA5D9 /* Remixa */ = {
 			isa = PBXGroup;
 			children = (
 				9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */,
+				E53F06950213F1666C3453A7 /* AI */,
 				AB38862C01CC972EC3F23026 /* App */,
 				F5A2435FE59D000FD1948B4E /* Audio */,
+				E22BB2C170D98302D66B66F3 /* Control */,
 				5537E8F9DE49799B71073E52 /* Effects */,
 				E9941F7817C114BB84C670DE /* Models */,
 				1F36BED6CAA4F55BE9BED4EA /* Views */,
@@ -169,12 +250,14 @@
 			buildConfigurationList = 35F1673F61CE37AD9F349CF7 /* Build configuration list for PBXNativeTarget "Remixa" */;
 			buildPhases = (
 				9436EF6575273A0CAB74884A /* Sources */,
+				B26B7C8D2B7B66D483DA7633 /* Embed remixa CLI */,
 				102F5B9B99CD8988DD94C49F /* Resources */,
 				01E6B1A10FFB0A192F31518A /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F1F2470D98862271B2B38E69 /* PBXTargetDependency */,
 			);
 			name = Remixa;
 			packageProductDependencies = (
@@ -183,6 +266,23 @@
 			productName = Remixa;
 			productReference = CDEC93DED112C5871F59C6A4 /* Remixa.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A0ACB2C324C9C6B8D825F3D5 /* RemixaCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 502E619ADED86919A32F380B /* Build configuration list for PBXNativeTarget "RemixaCLI" */;
+			buildPhases = (
+				54F68A8F193539416BD4A8D2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RemixaCLI;
+			packageProductDependencies = (
+			);
+			productName = RemixaCLI;
+			productReference = 22020D84CCFB026BD145F5DB /* RemixaCLI */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -194,6 +294,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					76166ED6874F8BD2F1DAEB9E = {
+						ProvisioningStyle = Manual;
+					};
+					A0ACB2C324C9C6B8D825F3D5 = {
 						ProvisioningStyle = Manual;
 					};
 				};
@@ -216,6 +319,7 @@
 			projectRoot = "";
 			targets = (
 				76166ED6874F8BD2F1DAEB9E /* Remixa */,
+				A0ACB2C324C9C6B8D825F3D5 /* RemixaCLI */,
 			);
 		};
 /* End PBXProject section */
@@ -226,16 +330,53 @@
 			buildActionMask = 2147483647;
 			files = (
 				275D46005C2FD3B118E30F0D /* Assets.xcassets in Resources */,
+				5631DC120192D9AC29EB811B /* RemixaCLI in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		B26B7C8D2B7B66D483DA7633 /* Embed remixa CLI */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed remixa CLI";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nSRC=\"${BUILT_PRODUCTS_DIR}/remixa\"\nDST_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\nmkdir -p \"${DST_DIR}\"\ncp -f \"${SRC}\" \"${DST_DIR}/remixa\"\nchmod +x \"${DST_DIR}/remixa\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		54F68A8F193539416BD4A8D2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BC0C92E13600DD617068BECD /* AppLauncher.swift in Sources */,
+				1EE1CFC68372589279094742 /* JSONHelpers.swift in Sources */,
+				27A4393CDA31BD0292A3E640 /* MCPServer.swift in Sources */,
+				4B01023B34460794BAE49E6D /* SocketClient.swift in Sources */,
+				75BA10ACD1C19953303B7A25 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9436EF6575273A0CAB74884A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				30E4772B746A84AE9D523873 /* AIAssistantPanel.swift in Sources */,
+				32903C496A2DE9FA8FF31029 /* AIAssistantRunner.swift in Sources */,
+				859E6043D2CC5C7FC7DBD191 /* AIBackend.swift in Sources */,
 				CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */,
 				1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */,
 				2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */,
@@ -243,6 +384,10 @@
 				6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */,
 				496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */,
 				8012945FAE09D62584B13D26 /* ContentView.swift in Sources */,
+				4ED2FFD8EBF012B46191840C /* ControlConnection.swift in Sources */,
+				9DFD353FC6C556E06F7BCBA9 /* ControlJSON.swift in Sources */,
+				5D7322F841C10AA69ACC6FC8 /* ControlMethods.swift in Sources */,
+				5160269E1C0A30986EBE8EAF /* ControlServer.swift in Sources */,
 				5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */,
 				E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */,
 				A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */,
@@ -263,6 +408,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F1F2470D98862271B2B38E69 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A0ACB2C324C9C6B8D825F3D5 /* RemixaCLI */;
+			targetProxy = 534D63F8444B0608B967E92D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		04407EB135D15EA6075B258B /* Release */ = {
@@ -318,7 +471,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -430,7 +583,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -440,6 +593,38 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		878675BA606449BA80F43A18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.uyuk216.RemixaCLI;
+				PRODUCT_NAME = remixa;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+			};
+			name = Release;
+		};
+		B83A2440279F19990852651B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.uyuk216.RemixaCLI;
+				PRODUCT_NAME = remixa;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
 			};
 			name = Debug;
 		};
@@ -460,6 +645,15 @@
 			buildConfigurations = (
 				154DC080BDA7AE5C6B2945C0 /* Debug */,
 				139932B83A89D5FC923DD75B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		502E619ADED86919A32F380B /* Build configuration list for PBXNativeTarget "RemixaCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B83A2440279F19990852651B /* Debug */,
+				878675BA606449BA80F43A18 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

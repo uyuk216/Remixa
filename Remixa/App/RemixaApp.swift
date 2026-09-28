@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 struct RemixaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var project = RemixaProject()
+    @StateObject private var timelineEngine = TimelineEngine()
+    @AppStorage("controlServerEnabled") private var controlServerEnabled: Bool = true
     private let updaterController: SPUStandardUpdaterController
     private let hasValidSparkleKey: Bool
 
@@ -17,6 +19,16 @@ struct RemixaApp: App {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        configureAppDelegate()
+    }
+
+    /// Hands the updater controller to the AppDelegate (only when the updater
+    /// was actually started, i.e. a valid Sparkle key is present) so it can
+    /// kick off a background check-for-updates on every launch.
+    private func configureAppDelegate() {
+        if hasValidSparkleKey {
+            appDelegate.updaterController = updaterController
+        }
     }
 
     /// SUPublicEDKey is empty in local/Debug builds (SPARKLE_PUBLIC_KEY build
@@ -41,7 +53,22 @@ struct RemixaApp: App {
         Window("Remixa", id: "main") {
             ContentView()
                 .environmentObject(project)
+                .environmentObject(timelineEngine)
                 .frame(minWidth: 900, minHeight: 560)
+                .onAppear {
+                    timelineEngine.attach(project: project)
+                    ControlServer.shared.attach(project: project, timelineEngine: timelineEngine)
+                    if controlServerEnabled {
+                        ControlServer.shared.start()
+                    }
+                }
+                .onChange(of: controlServerEnabled) { _, enabled in
+                    if enabled {
+                        ControlServer.shared.start()
+                    } else {
+                        ControlServer.shared.stop()
+                    }
+                }
         }
         .defaultSize(width: 1100, height: 700)
         .commands {
@@ -84,14 +111,45 @@ struct RemixaApp: App {
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             }
         }
+
+        Settings {
+            SettingsView()
+        }
+    }
+}
+
+/// App settings window (Remixa > 設定…). Currently just the control-server toggle;
+/// grows here rather than in `ContentView` as more preferences are added.
+struct SettingsView: View {
+    @AppStorage("controlServerEnabled") private var controlServerEnabled: Bool = true
+
+    var body: some View {
+        Form {
+            Toggle("外部からの操作を許可", isOn: $controlServerEnabled)
+                .toggleStyle(.switch)
+            Text("AIアシスタントや外部のCLIツールがRemixaを操作できるようにします(ローカルソケット経由)。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(width: 420)
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by `RemixaApp.init()` so we can trigger a background update check
+    /// once per launch, in addition to Sparkle's own daily scheduled check.
+    var updaterController: SPUStandardUpdaterController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // See the `Window` vs `WindowGroup` comment above: this is a second line of
         // defense against Finder-open events spawning an extra tabbed window.
         NSWindow.allowsAutomaticWindowTabbing = false
+
+        // Sparkle's SUScheduledCheckInterval only checks once every 24h, so an
+        // app that isn't kept running continuously could go a long time between
+        // checks. Force one check in the background on every launch as well.
+        updaterController?.updater.checkForUpdatesInBackground()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

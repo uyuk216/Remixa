@@ -6,7 +6,7 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.2.1"
     CURRENT_PROJECT_VERSION: "1"
     SPARKLE_PUBLIC_KEY: ""
     SWIFT_VERSION: "6.0"
@@ -22,6 +22,17 @@ packages:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.6.0
 targets:
+  RemixaCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - path: RemixaCLI/Sources
+    settings:
+      base:
+        PRODUCT_NAME: remixa
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_EMIT_LOC_STRINGS: NO
+
   Remixa:
     type: application
     platform: macOS
@@ -41,6 +52,16 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
     dependencies:
       - package: Sparkle
+      - target: RemixaCLI
+    postCompileScripts:
+      - name: "Embed remixa CLI"
+        script: |
+          set -e
+          SRC="${BUILT_PRODUCTS_DIR}/remixa"
+          DST_DIR="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          mkdir -p "${DST_DIR}"
+          cp -f "${SRC}" "${DST_DIR}/remixa"
+          chmod +x "${DST_DIR}/remixa"
     scheme:
       testTargets: []
       gatherCoverageData: false

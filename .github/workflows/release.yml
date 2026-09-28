@@ -56,10 +56,26 @@ jobs:
           fi
           echo "app_path=${APP_PATH}" >> "$GITHUB_OUTPUT"
 
+      - name: Verify embedded remixa CLI
+        run: |
+          CLI_PATH="${{ steps.app.outputs.app_path }}/Contents/Helpers/remixa"
+          if [ ! -x "$CLI_PATH" ]; then
+            echo "remixa CLI not found or not executable at ${CLI_PATH}" >&2
+            exit 1
+          fi
+          file "$CLI_PATH"
+
+          APP_EXE="${{ steps.app.outputs.app_path }}/Contents/MacOS/Remixa"
+          if [ ! -x "$APP_EXE" ]; then
+            echo "Remixa app executable not found or not executable at ${APP_EXE}" >&2
+            exit 1
+          fi
+
       - name: Ad-hoc codesign
         run: |
           codesign --force --deep -s - "${{ steps.app.outputs.app_path }}"
           codesign --verify --verbose "${{ steps.app.outputs.app_path }}"
+          codesign --verify --verbose "${{ steps.app.outputs.app_path }}/Contents/Helpers/remixa"
 
       - name: Create DMG
         run: |
