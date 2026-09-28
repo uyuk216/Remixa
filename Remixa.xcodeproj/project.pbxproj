@@ -1,0 +1,453 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */; };
+		275D46005C2FD3B118E30F0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */; };
+		280F44151296B1BC993F9DEB /* WaveformGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */; };
+		2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D9346376D4E5E57D923510 /* AudioEngineController.swift */; };
+		3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 776C82119C39B6D31D0BDC69 /* AudioExporter.swift */; };
+		5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */; };
+		6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */; };
+		8012945FAE09D62584B13D26 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85A360B3B18F2E9CB4D5672 /* ContentView.swift */; };
+		9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870CB2266F8CF72C322C812D /* RemixaApp.swift */; };
+		A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13754590A106AAAFCE1A319E /* EffectsRackView.swift */; };
+		B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE149128022845371FDB2EA /* ExportView.swift */; };
+		CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */; };
+		DDB073E17731142C649360D2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CE8E5ADAEA4AC28B405184B2 /* Sparkle */; };
+		E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD70612A795902A7351612D0 /* EffectsRackSettings.swift */; };
+		E82F8AFB2F718E8EC9D1D763 /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6BEF61FA61CD60D31420288 /* WaveformView.swift */; };
+		FE7BB2E59D8FB210570205D7 /* TransportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516CFB7F305482893D941A0B /* TransportView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		13754590A106AAAFCE1A319E /* EffectsRackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackView.swift; sourceTree = "<group>"; };
+		2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformGenerator.swift; sourceTree = "<group>"; };
+		2DE149128022845371FDB2EA /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioPCMBuffer+Editing.swift"; sourceTree = "<group>"; };
+		516CFB7F305482893D941A0B /* TransportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportView.swift; sourceTree = "<group>"; };
+		776C82119C39B6D31D0BDC69 /* AudioExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioExporter.swift; sourceTree = "<group>"; };
+		7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDocument.swift; sourceTree = "<group>"; };
+		870CB2266F8CF72C322C812D /* RemixaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixaApp.swift; sourceTree = "<group>"; };
+		9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMEstimator.swift; sourceTree = "<group>"; };
+		AD70612A795902A7351612D0 /* EffectsRackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackSettings.swift; sourceTree = "<group>"; };
+		CDEC93DED112C5871F59C6A4 /* Remixa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Remixa.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D3D9346376D4E5E57D923510 /* AudioEngineController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineController.swift; sourceTree = "<group>"; };
+		D6BEF61FA61CD60D31420288 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
+		E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsGraph.swift; sourceTree = "<group>"; };
+		F85A360B3B18F2E9CB4D5672 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		01E6B1A10FFB0A192F31518A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DDB073E17731142C649360D2 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1F36BED6CAA4F55BE9BED4EA /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F85A360B3B18F2E9CB4D5672 /* ContentView.swift */,
+				13754590A106AAAFCE1A319E /* EffectsRackView.swift */,
+				2DE149128022845371FDB2EA /* ExportView.swift */,
+				516CFB7F305482893D941A0B /* TransportView.swift */,
+				D6BEF61FA61CD60D31420288 /* WaveformView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		5537E8F9DE49799B71073E52 /* Effects */ = {
+			isa = PBXGroup;
+			children = (
+				E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */,
+				AD70612A795902A7351612D0 /* EffectsRackSettings.swift */,
+			);
+			path = Effects;
+			sourceTree = "<group>";
+		};
+		AB38862C01CC972EC3F23026 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				870CB2266F8CF72C322C812D /* RemixaApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		AE4C7EB7B8B411E6C3856487 = {
+			isa = PBXGroup;
+			children = (
+				E5D138B20E07F8D3A8DCA5D9 /* Remixa */,
+				BDEAC699DD4FFEFDAEDE1CD7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BDEAC699DD4FFEFDAEDE1CD7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CDEC93DED112C5871F59C6A4 /* Remixa.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E5D138B20E07F8D3A8DCA5D9 /* Remixa */ = {
+			isa = PBXGroup;
+			children = (
+				9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */,
+				AB38862C01CC972EC3F23026 /* App */,
+				F5A2435FE59D000FD1948B4E /* Audio */,
+				5537E8F9DE49799B71073E52 /* Effects */,
+				E9941F7817C114BB84C670DE /* Models */,
+				1F36BED6CAA4F55BE9BED4EA /* Views */,
+			);
+			path = Remixa;
+			sourceTree = "<group>";
+		};
+		E9941F7817C114BB84C670DE /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		F5A2435FE59D000FD1948B4E /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				D3D9346376D4E5E57D923510 /* AudioEngineController.swift */,
+				776C82119C39B6D31D0BDC69 /* AudioExporter.swift */,
+				47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */,
+				A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */,
+				2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		76166ED6874F8BD2F1DAEB9E /* Remixa */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 35F1673F61CE37AD9F349CF7 /* Build configuration list for PBXNativeTarget "Remixa" */;
+			buildPhases = (
+				9436EF6575273A0CAB74884A /* Sources */,
+				102F5B9B99CD8988DD94C49F /* Resources */,
+				01E6B1A10FFB0A192F31518A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Remixa;
+			packageProductDependencies = (
+				CE8E5ADAEA4AC28B405184B2 /* Sparkle */,
+			);
+			productName = Remixa;
+			productReference = CDEC93DED112C5871F59C6A4 /* Remixa.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		79540AAF042DB6D8E515661C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					76166ED6874F8BD2F1DAEB9E = {
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 0CE5F90E89B12E7A3C3F8B7E /* Build configuration list for PBXProject "Remixa" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = AE4C7EB7B8B411E6C3856487;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F96318D2938D00C1DBAC292F /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = BDEAC699DD4FFEFDAEDE1CD7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				76166ED6874F8BD2F1DAEB9E /* Remixa */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		102F5B9B99CD8988DD94C49F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				275D46005C2FD3B118E30F0D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9436EF6575273A0CAB74884A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */,
+				1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */,
+				2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */,
+				3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */,
+				6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */,
+				8012945FAE09D62584B13D26 /* ContentView.swift in Sources */,
+				5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */,
+				E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */,
+				A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */,
+				B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */,
+				9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */,
+				FE7BB2E59D8FB210570205D7 /* TransportView.swift in Sources */,
+				280F44151296B1BC993F9DEB /* WaveformGenerator.swift in Sources */,
+				E82F8AFB2F718E8EC9D1D763 /* WaveformView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		04407EB135D15EA6075B258B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_KEY = "";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		139932B83A89D5FC923DD75B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Remixa/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.uyuk216.remixa;
+				PRODUCT_NAME = Remixa;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		154DC080BDA7AE5C6B2945C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Remixa/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.uyuk216.remixa;
+				PRODUCT_NAME = Remixa;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		7110F33B7B75DF5B618A43C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SPARKLE_PUBLIC_KEY = "";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0CE5F90E89B12E7A3C3F8B7E /* Build configuration list for PBXProject "Remixa" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7110F33B7B75DF5B618A43C9 /* Debug */,
+				04407EB135D15EA6075B258B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		35F1673F61CE37AD9F349CF7 /* Build configuration list for PBXNativeTarget "Remixa" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				154DC080BDA7AE5C6B2945C0 /* Debug */,
+				139932B83A89D5FC923DD75B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F96318D2938D00C1DBAC292F /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE8E5ADAEA4AC28B405184B2 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F96318D2938D00C1DBAC292F /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 79540AAF042DB6D8E515661C /* Project object */;
+}
