@@ -1,0 +1,181 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+/// One horizontal lane on the timeline holding a track's clips.
+struct TrackLaneView: View {
+    @EnvironmentObject var project: RemixaProject
+    @ObservedObject var track: Track
+    let pixelsPerSecond: Double
+    let width: CGFloat
+    let height: CGFloat
+    let playhead: Double
+    let onDoubleTapClip: (Clip) -> Void
+    let onDropAudio: (URL, Double) -> Void
+
+    @State private var isDropTargeted = false
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(isDropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
+            ForEach(track.clips) { clip in
+                ClipView(
+                    clip: clip,
+                    track: track,
+                    pixelsPerSecond: pixelsPerSecond,
+                    laneHeight: height,
+                    isSelected: project.selectedClipID == clip.id,
+                    onDoubleTap: { onDoubleTapClip(clip) }
+                )
+                .environmentObject(project)
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            Task { @MainActor in
+                onDropAudio(url, 0)
+            }
+        }
+        return true
+    }
+}
+
+/// A single clip block: drag to move, drag edge handles to trim, double-click to
+/// open in the v0.1 single-file editor.
+private struct ClipView: View {
+    @EnvironmentObject var project: RemixaProject
+    let clip: Clip
+    @ObservedObject var track: Track
+    let pixelsPerSecond: Double
+    let laneHeight: CGFloat
+    let isSelected: Bool
+    let onDoubleTap: () -> Void
+
+    @State private var dragOffsetSeconds: Double = 0
+    @State private var isDraggingBody = false
+
+    private let handleWidth: CGFloat = 7
+
+    private var clipWidth: CGFloat { max(10, CGFloat(clip.duration) * pixelsPerSecond) }
+    private var clipX: CGFloat { CGFloat(clip.timelineStart + dragOffsetSeconds) * pixelsPerSecond }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.accentColor.opacity(isSelected ? 0.85 : 0.55))
+            Canvas { context, size in
+                let path = waveformPath(in: size)
+                context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(isSelected ? Color.white : Color.clear, lineWidth: 1.5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(clip.name)
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 2)
+                Spacer()
+            }
+            HStack(spacing: 0) {
+                trimHandle(leading: true)
+                Spacer()
+                trimHandle(leading: false)
+            }
+        }
+        .frame(width: clipWidth, height: laneHeight - 12)
+        .offset(x: clipX, y: 6)
+        .onTapGesture(count: 2) { onDoubleTap() }
+        .onTapGesture(count: 1) { project.selectedClipID = clip.id }
+        .gesture(
+            DragGesture(minimumDistance: 3)
+                .onChanged { value in
+                    isDraggingBody = true
+                    dragOffsetSeconds = Double(value.translation.width) / pixelsPerSecond
+                }
+                .onEnded { value in
+                    let newStart = clip.timelineStart + Double(value.translation.width) / pixelsPerSecond
+                    dragOffsetSeconds = 0
+                    isDraggingBody = false
+                    project.moveClip(clip, on: track, toTimelineStart: newStart)
+                }
+        )
+        .contextMenu {
+            Button("複製") { project.duplicateClip(clip, on: track) }
+            Button("削除", role: .destructive) { project.deleteClip(clip, on: track) }
+        }
+    }
+
+    /// Builds the waveform stroke path for the visible (trimmed) portion of the clip,
+    /// sliced out of the whole-source-file peaks cached per file in `project`.
+    private func waveformPath(in size: CGSize) -> Path {
+        guard let waveform = project.waveform(for: clip),
+              waveform.sourceDuration > 0,
+              !waveform.peaks.isEmpty else { return Path() }
+
+        let peakCount = waveform.peaks.count
+        let startFraction = clip.sourceStart / waveform.sourceDuration
+        let endFraction = (clip.sourceStart + clip.duration) / waveform.sourceDuration
+        let startIndex = max(0, min(peakCount - 1, Int(startFraction * Double(peakCount))))
+        let endIndex = max(startIndex + 1, min(peakCount, Int(endFraction * Double(peakCount))))
+        let slice = waveform.peaks[startIndex..<endIndex]
+        guard !slice.isEmpty else { return Path() }
+
+        let midY = size.height / 2
+        let stepX = size.width / CGFloat(slice.count)
+        let gain = Float(clip.gain)
+        var path = Path()
+        for (i, peak) in slice.enumerated() {
+            let x = CGFloat(i) * stepX
+            let h = CGFloat(min(1, peak * gain)) * midY
+            path.move(to: CGPoint(x: x, y: midY - h))
+            path.addLine(to: CGPoint(x: x, y: midY + h))
+        }
+        return path
+    }
+
+    private func trimHandle(leading: Bool) -> some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.001)) // invisible but hit-testable
+            .frame(width: handleWidth)
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        applyTrim(leading: leading, translation: Double(value.translation.width))
+                    }
+                    .onEnded { value in
+                        applyTrim(leading: leading, translation: Double(value.translation.width), commit: true)
+                    }
+            )
+            .onHover { hovering in
+                if hovering { NSCursor.resizeLeftRight.set() }
+            }
+    }
+
+    private func applyTrim(leading: Bool, translation: Double, commit: Bool = false) {
+        let deltaSeconds = translation / pixelsPerSecond
+        if leading {
+            let newStart = max(0, clip.timelineStart + deltaSeconds)
+            let newSourceStart = max(0, clip.sourceStart + (newStart - clip.timelineStart))
+            let newDuration = clip.duration - (newStart - clip.timelineStart)
+            if commit, newDuration > 0.05 {
+                project.trimClip(clip, on: track, newStart: newStart, newDuration: newDuration, newSourceStart: newSourceStart)
+            }
+        } else {
+            let newDuration = max(0.05, clip.duration + deltaSeconds)
+            if commit {
+                project.trimClip(clip, on: track, newStart: clip.timelineStart, newDuration: newDuration, newSourceStart: clip.sourceStart)
+            }
+        }
+    }
+}

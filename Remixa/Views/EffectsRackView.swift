@@ -1,7 +1,10 @@
 import SwiftUI
 
+/// Editor for one `EffectsRackSettings` value. Used both by the v0.1 single-clip
+/// editor (bound to `AudioDocument.effects`) and by each v0.2 track's effects
+/// popover (bound to `Track.effects`), so the two feature sets share one UI/engine.
 struct EffectsRackView: View {
-    @EnvironmentObject var document: AudioDocument
+    @Binding var effects: EffectsRackSettings
 
     var body: some View {
         ScrollView {
@@ -17,41 +20,41 @@ struct EffectsRackView: View {
     }
 
     private var eqSection: some View {
-        EffectBox(title: "3バンドEQ", bypass: $document.effects.eq.bypass) {
-            sliderRow("Low", value: $document.effects.eq.lowGainDB, range: -24...24, unit: "dB")
-            sliderRow("Mid", value: $document.effects.eq.midGainDB, range: -24...24, unit: "dB")
-            sliderRow("High", value: $document.effects.eq.highGainDB, range: -24...24, unit: "dB")
+        EffectBox(title: "3バンドEQ", bypass: $effects.eq.bypass) {
+            sliderRow("Low", value: $effects.eq.lowGainDB, range: -24...24, unit: "dB")
+            sliderRow("Mid", value: $effects.eq.midGainDB, range: -24...24, unit: "dB")
+            sliderRow("High", value: $effects.eq.highGainDB, range: -24...24, unit: "dB")
         }
     }
 
     private var filterSection: some View {
-        EffectBox(title: "フィルター", bypass: $document.effects.filter.bypass) {
-            Picker("種類", selection: $document.effects.filter.isHighPass) {
+        EffectBox(title: "フィルター", bypass: $effects.filter.bypass) {
+            Picker("種類", selection: $effects.filter.isHighPass) {
                 Text("ローパス").tag(false)
                 Text("ハイパス").tag(true)
             }
             .pickerStyle(.segmented)
-            sliderRow("周波数", value: $document.effects.filter.cutoffHz, range: 20...20000, unit: "Hz")
+            sliderRow("周波数", value: $effects.filter.cutoffHz, range: 20...20000, unit: "Hz")
         }
     }
 
     private var reverbSection: some View {
-        EffectBox(title: "リバーブ", bypass: $document.effects.reverb.bypass) {
-            sliderRow("Wet/Dry", value: $document.effects.reverb.wetDryMix, range: 0...100, unit: "%")
+        EffectBox(title: "リバーブ", bypass: $effects.reverb.bypass) {
+            sliderRow("Wet/Dry", value: $effects.reverb.wetDryMix, range: 0...100, unit: "%")
         }
     }
 
     private var delaySection: some View {
-        EffectBox(title: "ディレイ", bypass: $document.effects.delay.bypass) {
-            sliderRow("時間", value: $document.effects.delay.delayTimeSec, range: 0...2, unit: "秒")
-            sliderRow("フィードバック", value: $document.effects.delay.feedback, range: 0...100, unit: "%")
-            sliderRow("Wet/Dry", value: $document.effects.delay.wetDryMix, range: 0...100, unit: "%")
+        EffectBox(title: "ディレイ", bypass: $effects.delay.bypass) {
+            sliderRow("時間", value: $effects.delay.delayTimeSec, range: 0...2, unit: "秒")
+            sliderRow("フィードバック", value: $effects.delay.feedback, range: 0...100, unit: "%")
+            sliderRow("Wet/Dry", value: $effects.delay.wetDryMix, range: 0...100, unit: "%")
         }
     }
 
     private var distortionSection: some View {
-        EffectBox(title: "ディストーション", bypass: $document.effects.distortion.bypass) {
-            sliderRow("Wet/Dry", value: $document.effects.distortion.wetDryMix, range: 0...100, unit: "%")
+        EffectBox(title: "ディストーション", bypass: $effects.distortion.bypass) {
+            sliderRow("Wet/Dry", value: $effects.distortion.wetDryMix, range: 0...100, unit: "%")
         }
     }
 

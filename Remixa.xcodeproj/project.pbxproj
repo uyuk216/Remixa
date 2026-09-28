@@ -7,18 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		046CC90BF64354A2D2A3DAAE /* TrackLaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */; };
+		1496F4243D247F3ED90C7D21 /* TimelineExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */; };
 		1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */; };
 		275D46005C2FD3B118E30F0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */; };
 		280F44151296B1BC993F9DEB /* WaveformGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */; };
 		2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D9346376D4E5E57D923510 /* AudioEngineController.swift */; };
+		3A8C827820CEC1D31313B878 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E01BC02B0DC524332C889FA /* Project.swift */; };
 		3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 776C82119C39B6D31D0BDC69 /* AudioExporter.swift */; };
+		496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */; };
 		5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */; };
+		6856F1C014614AE634167121 /* TimelineExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */; };
 		6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */; };
+		7CBC31772F8E33D8782A62A5 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */; };
 		8012945FAE09D62584B13D26 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85A360B3B18F2E9CB4D5672 /* ContentView.swift */; };
+		8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */; };
+		8F120F5062EAD1736F6243B8 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B343FADECE68CADAB245E88 /* TimelineView.swift */; };
 		9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870CB2266F8CF72C322C812D /* RemixaApp.swift */; };
 		A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13754590A106AAAFCE1A319E /* EffectsRackView.swift */; };
 		B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE149128022845371FDB2EA /* ExportView.swift */; };
 		CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */; };
+		D2609537D8C281327F21D241 /* TrackHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */; };
 		DDB073E17731142C649360D2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CE8E5ADAEA4AC28B405184B2 /* Sparkle */; };
 		E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD70612A795902A7351612D0 /* EffectsRackSettings.swift */; };
 		E82F8AFB2F718E8EC9D1D763 /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6BEF61FA61CD60D31420288 /* WaveformView.swift */; };
@@ -26,14 +35,22 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
 		13754590A106AAAFCE1A319E /* EffectsRackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackView.swift; sourceTree = "<group>"; };
 		2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformGenerator.swift; sourceTree = "<group>"; };
 		2DE149128022845371FDB2EA /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDocumentIO.swift; sourceTree = "<group>"; };
+		38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackHeaderView.swift; sourceTree = "<group>"; };
+		3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineExporter.swift; sourceTree = "<group>"; };
 		47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioPCMBuffer+Editing.swift"; sourceTree = "<group>"; };
 		516CFB7F305482893D941A0B /* TransportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportView.swift; sourceTree = "<group>"; };
+		6B343FADECE68CADAB245E88 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
+		6E01BC02B0DC524332C889FA /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		776C82119C39B6D31D0BDC69 /* AudioExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioExporter.swift; sourceTree = "<group>"; };
+		7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipEditorSheet.swift; sourceTree = "<group>"; };
 		7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDocument.swift; sourceTree = "<group>"; };
 		870CB2266F8CF72C322C812D /* RemixaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixaApp.swift; sourceTree = "<group>"; };
+		94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackLaneView.swift; sourceTree = "<group>"; };
 		9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMEstimator.swift; sourceTree = "<group>"; };
 		AD70612A795902A7351612D0 /* EffectsRackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackSettings.swift; sourceTree = "<group>"; };
@@ -41,6 +58,7 @@
 		D3D9346376D4E5E57D923510 /* AudioEngineController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineController.swift; sourceTree = "<group>"; };
 		D6BEF61FA61CD60D31420288 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
 		E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsGraph.swift; sourceTree = "<group>"; };
+		EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineExportView.swift; sourceTree = "<group>"; };
 		F85A360B3B18F2E9CB4D5672 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -59,9 +77,14 @@
 		1F36BED6CAA4F55BE9BED4EA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */,
 				F85A360B3B18F2E9CB4D5672 /* ContentView.swift */,
 				13754590A106AAAFCE1A319E /* EffectsRackView.swift */,
 				2DE149128022845371FDB2EA /* ExportView.swift */,
+				EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */,
+				6B343FADECE68CADAB245E88 /* TimelineView.swift */,
+				38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */,
+				94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */,
 				516CFB7F305482893D941A0B /* TransportView.swift */,
 				D6BEF61FA61CD60D31420288 /* WaveformView.swift */,
 			);
@@ -118,6 +141,8 @@
 			isa = PBXGroup;
 			children = (
 				7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */,
+				6E01BC02B0DC524332C889FA /* Project.swift */,
+				33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -129,6 +154,8 @@
 				776C82119C39B6D31D0BDC69 /* AudioExporter.swift */,
 				47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */,
 				A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */,
+				0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */,
+				3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */,
 				2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */,
 			);
 			path = Audio;
@@ -214,12 +241,21 @@
 				2D7D7EE14BD18BD9E91D5592 /* AudioEngineController.swift in Sources */,
 				3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */,
 				6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */,
+				496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */,
 				8012945FAE09D62584B13D26 /* ContentView.swift in Sources */,
 				5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */,
 				E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */,
 				A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */,
 				B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */,
+				3A8C827820CEC1D31313B878 /* Project.swift in Sources */,
+				8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */,
 				9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */,
+				7CBC31772F8E33D8782A62A5 /* TimelineEngine.swift in Sources */,
+				6856F1C014614AE634167121 /* TimelineExportView.swift in Sources */,
+				1496F4243D247F3ED90C7D21 /* TimelineExporter.swift in Sources */,
+				8F120F5062EAD1736F6243B8 /* TimelineView.swift in Sources */,
+				D2609537D8C281327F21D241 /* TrackHeaderView.swift in Sources */,
+				046CC90BF64354A2D2A3DAAE /* TrackLaneView.swift in Sources */,
 				FE7BB2E59D8FB210570205D7 /* TransportView.swift in Sources */,
 				280F44151296B1BC993F9DEB /* WaveformGenerator.swift in Sources */,
 				E82F8AFB2F718E8EC9D1D763 /* WaveformView.swift in Sources */,
@@ -282,7 +318,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -394,7 +430,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
