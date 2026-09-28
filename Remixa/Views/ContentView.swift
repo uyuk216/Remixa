@@ -66,6 +66,7 @@ struct ContentView: View {
             TimelineExportView(project: project)
         }
         .background(KeyEventHandlingView(onSpace: { timelineEngine.togglePlayPause() }))
+        .background(StemSeparationFlow())
     }
 
     private var toolbar: some View {
@@ -97,6 +98,14 @@ struct ContentView: View {
                 Label("ミックスを書き出し", systemImage: "square.and.arrow.up")
             }
             .disabled(project.projectDuration <= 0)
+            Button {
+                if let clipId = project.selectedClipID {
+                    NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clipId])
+                }
+            } label: {
+                Label("パート分離", systemImage: "waveform.and.mic")
+            }
+            .disabled(project.selectedClipID == nil)
             Button {
                 withAnimation { showAIPanel.toggle() }
             } label: {

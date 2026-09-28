@@ -23,6 +23,10 @@ remixa - Remixa.app 制御用コマンドラインツール / CLI for controllin
   remixa export <out.wav|out.m4a>   ミックスを書き出し
   remixa analyze <audio>            音声ファイルを解析
   remixa state                      プロジェクトの全状態を JSON で出力
+  remixa stems status               AI パート分離環境の状態を表示
+  remixa stems install              AI パート分離環境をインストール（初回は ~1GB、完了まで待機）
+  remixa stems separate <clipId>    クリップを AI でパート分離（ボーカル/ドラム等のトラックを新規作成、完了まで待機）
+  remixa split <audio>              音声ファイルをトラックに追加してすぐパート分離（初回は ~1GB、完了まで待機）
   remixa call <method> [json]       任意の RPC メソッドを直接呼び出す (例: remixa call project.get '{}')
   remixa install-cli                このバイナリを /usr/local/bin または ~/.local/bin にシンボリックリンク
   remixa mcp                        MCP サーバとして標準入出力で待ち受け (Claude Code / Codex 用)
@@ -157,6 +161,37 @@ case "analyze":
 
 case "state":
     runCall(method: "project.get")
+
+case "stems":
+    guard let sub = args.first else { printErrorAndExit("使い方: remixa stems status|install|separate <clipId>") }
+    switch sub {
+    case "status":
+        runCall(method: "stems.status")
+    case "install":
+        print("AI パート分離環境をインストールしています（初回は ~1GB のダウンロードが発生します）…")
+        runCall(method: "stems.install")
+    case "separate":
+        guard args.count > 1 else { printErrorAndExit("使い方: remixa stems separate <clipId>") }
+        runCall(method: "stems.separate", params: ["clipId": args[1]])
+    default:
+        printErrorAndExit("不明な stems サブコマンドです: \(sub)")
+    }
+
+case "split":
+    guard let audio = args.first else { printErrorAndExit("使い方: remixa split <audio>") }
+    let client = connectedClient()
+    defer { client.close_() }
+    do {
+        let addResp = try client.call(method: "track.add", params: ["audioPath": absolutePath(audio)])
+        guard let addResult = addResp["result"] as? [String: Any], let clipId = addResult["clipId"] as? String else {
+            printErrorAndExit("エラー: track.add がクリップIDを返しませんでした")
+        }
+        print("AI パート分離を実行しています（初回は環境構築で ~1GB のダウンロードが発生します）…")
+        let sepResp = try client.call(method: "stems.separate", params: ["clipId": clipId])
+        printResult(sepResp)
+    } catch {
+        printErrorAndExit("エラー: \(error)")
+    }
 
 case "call":
     guard let method = args.first else { printErrorAndExit("使い方: remixa call <method> [json-params]") }

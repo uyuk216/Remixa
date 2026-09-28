@@ -130,6 +130,10 @@ struct SettingsView: View {
             Text("AIアシスタントや外部のCLIツールがRemixaを操作できるようにします(ローカルソケット経由)。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Divider().padding(.vertical, 8)
+
+            StemEnvironmentSettingsSection()
         }
         .padding(20)
         .frame(width: 420)
@@ -171,4 +175,5 @@ extension Notification.Name {
     static let remixaOpenProject = Notification.Name("remixaOpenProject")
     static let remixaSaveProject = Notification.Name("remixaSaveProject")
     static let remixaSaveProjectAs = Notification.Name("remixaSaveProjectAs")
+    static let remixaSeparateStems = Notification.Name("remixaSeparateStems")
 }

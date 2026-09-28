@@ -417,6 +417,106 @@ final class RemixaProject: ObservableObject {
         return result
     }
 
+    // MARK: - AI stem separation (v0.3)
+
+    /// Separates the given clip's audio (respecting its trim: `sourceStart`/`duration`)
+    /// into stems via `StemSeparationService`, adds one new track per stem
+    /// (ボーカル/ドラム/ベース/その他) with a clip placed at the same timeline start as
+    /// the original, and mutes the original track. Recorded as a single undo step.
+    /// Returns the new tracks' ids.
+    @discardableResult
+    func separateIntoStems(clipId: UUID, progress: @escaping @Sendable (Double, String) -> Void = { _, _ in }) async throws -> [UUID] {
+        guard let (track, clip) = findClip(clipId) else {
+            throw NSError(domain: "Remixa", code: 40, userInfo: [NSLocalizedDescriptionKey: "クリップが見つかりません"])
+        }
+        guard let sourceBuffer = try? loadBuffer(for: clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))) else {
+            throw NSError(domain: "Remixa", code: 41, userInfo: [NSLocalizedDescriptionKey: "音声を読み込めませんでした"])
+        }
+
+        // Render just the clip's trimmed region to a temp wav for Demucs to consume.
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("remixa-stem-src-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        let regionURL = tmpDir.appendingPathComponent("region.wav")
+        try Self.writeRegion(of: sourceBuffer, sourceStart: clip.sourceStart, duration: clip.duration, to: regionURL)
+
+        let outputDir: URL
+        if let fileURL {
+            outputDir = fileURL.appendingPathComponent("Audio", isDirectory: true).appendingPathComponent("stems-\(clip.id.uuidString)", isDirectory: true)
+        } else {
+            outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Remixa", isDirectory: true)
+                .appendingPathComponent("stems-output", isDirectory: true)
+                .appendingPathComponent(clip.id.uuidString, isDirectory: true)
+        }
+
+        let stems = try await StemSeparationService.shared.separate(audioURL: regionURL, outputDir: outputDir, progress: progress)
+        try? FileManager.default.removeItem(at: tmpDir)
+
+        pushUndo()
+        var newTrackIDs: [UUID] = []
+        for stem in stems {
+            guard let stemBuffer = try? loadBuffer(for: stem.url) else { continue }
+            let duration = Double(stemBuffer.frameLength) / stemBuffer.format.sampleRate
+            let newTrack = Track(name: Self.japaneseStemName(for: stem.name))
+            let newClip = Clip(name: newTrack.name, audioURL: stem.url, timelineStart: clip.timelineStart, sourceStart: 0, duration: duration)
+            newTrack.clips.append(newClip)
+            tracks.append(newTrack)
+            newTrackIDs.append(newTrack.id)
+        }
+        track.mute = true
+        objectWillChange.send()
+        return newTrackIDs
+    }
+
+    private func findClip(_ id: UUID) -> (Track, Clip)? {
+        for track in tracks {
+            if let clip = track.clips.first(where: { $0.id == id }) {
+                return (track, clip)
+            }
+        }
+        return nil
+    }
+
+    private static func japaneseStemName(for demucsName: String) -> String {
+        switch demucsName.lowercased() {
+        case "vocals": return "ボーカル"
+        case "drums": return "ドラム"
+        case "bass": return "ベース"
+        case "other": return "その他"
+        default: return demucsName
+        }
+    }
+
+    /// Writes `[sourceStart, sourceStart + duration)` of `buffer` to `url` as a wav file.
+    private static func writeRegion(of buffer: AVAudioPCMBuffer, sourceStart: Double, duration: Double, to url: URL) throws {
+        let format = buffer.format
+        let startFrame = AVAudioFramePosition(max(0, sourceStart) * format.sampleRate)
+        let frameCount = AVAudioFrameCount(max(0, duration) * format.sampleRate)
+        let endFrame = min(AVAudioFramePosition(buffer.frameLength), startFrame + AVAudioFramePosition(frameCount))
+        let clampedCount = AVAudioFrameCount(max(0, endFrame - startFrame))
+
+        guard let region = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: max(clampedCount, 1)) else {
+            throw NSError(domain: "Remixa", code: 42, userInfo: [NSLocalizedDescriptionKey: "バッファを確保できませんでした"])
+        }
+        region.frameLength = clampedCount
+        if clampedCount > 0, let srcData = buffer.floatChannelData, let dstData = region.floatChannelData {
+            for ch in 0..<Int(format.channelCount) {
+                dstData[ch].update(from: srcData[ch] + Int(startFrame), count: Int(clampedCount))
+            }
+        }
+
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: format.sampleRate,
+            AVNumberOfChannelsKey: format.channelCount,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        try file.write(from: region)
+    }
+
     func resetForNewProject() {
         tracks = [Track(name: "トラック 1")]
         bpm = 120

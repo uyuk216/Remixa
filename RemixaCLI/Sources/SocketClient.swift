@@ -113,7 +113,10 @@ final class RemixaSocketClient {
             }
         }
 
-        // Read until newline
+        // Read until newline. No SO_RCVTIMEO is set on this socket, so this blocks
+        // indefinitely — required because `export.mix`, `stems.install`, and
+        // `stems.separate` can legitimately take up to ~30 minutes (first-run
+        // ~1GB model download, offline rendering, etc.) and must not time out.
         var buffer = [UInt8]()
         var byte: UInt8 = 0
         while true {

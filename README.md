@@ -6,7 +6,7 @@ Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swi
 
 - DJ 風の音源編集（v0.1）
 - シンプルなマルチトラック DAW（v0.2）
-- AI によるステム分離（v0.3, 予定。モデルは初回利用時にダウンロードされ、アプリには同梱されません）
+- AI によるステム分離（v0.3。モデルは初回利用時にダウンロードされ、アプリには同梱されません）
 
 ### v0.1 の主な機能
 
@@ -34,6 +34,24 @@ Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swi
 
 - タイムライン上ではクリップの再生速度・ピッチは変更されません（テンポ/ピッチ変更は v0.1 の単体エディタでクリップを開いて適用してください）
 - `.remixa` はアトミックな `FileWrapper` 書き込みではなく通常のディレクトリへのコピーで保存されるため、保存中の強制終了に対する耐性は限定的です
+
+### v0.3 の主な機能（AI パート分離）
+
+- クリップを選択して「パート分離」を実行すると、[Demucs](https://github.com/facebookresearch/demucs)（Meta 製、MIT ライセンス）による AI 音源分離でボーカル・ドラム・ベース・その他のパートに分離し、それぞれ新しいトラックとして追加します
+- **初回利用時のみ**、分離環境（Python ランタイムと Demucs モデル、合計約 1GB）を `~/Library/Application Support/Remixa/stems` にダウンロードします。アプリ本体には同梱されません。ダウンロード中は進捗が表示され、完了後は再ダウンロードなしで繰り返し使えます
+- 分離処理はローカルで実行されるため、音声ファイルが外部に送信されることはありません
+- Demucs は MIT License で提供されています。クレジット: Meta AI Research (Demucs)
+
+#### CLI / MCP からのパート分離
+
+```sh
+remixa stems status                    # AI パート分離環境の状態（notInstalled/installing/ready/failed）
+remixa stems install                   # 環境をインストール（初回のみ、完了まで待機）
+remixa stems separate <clipId>         # 指定クリップをパート分離（完了まで待機）
+remixa split ~/Music/song.wav          # 音声を追加してすぐパート分離（完了まで待機）
+```
+
+MCP からは `stems_status` / `stems_install` / `stems_separate` ツールとして呼び出せます。いずれも初回は約 1GB のダウンロードが発生し得るため、`stems_install` と `stems_separate`（および `export_mix`）は完了まで最大 30 分程度ブロックする可能性があります。
 
 ## インストール（Releases から）
 
@@ -127,7 +145,7 @@ xcodebuild -project Remixa.xcodeproj -scheme Remixa -configuration Debug build
 
 - **v0.1**: DJ 風の波形編集、テンポ/ピッチ変更、エフェクトラック、書き出し
 - **v0.2**（本リリース）: シンプルなマルチトラック DAW（タイムライン、クリップ編集、トラックミキサー、プロジェクト保存/読み込み、ミックス書き出し）
-- **v0.3**: AI によるステム分離（モデルは初回利用時にダウンロード）
+- **v0.3**（本リリース）: AI によるステム分離（Demucs、モデルは初回利用時にダウンロード）、CLI/MCP からの `stems status`/`install`/`separate` 操作
 
 ## ライセンス
 

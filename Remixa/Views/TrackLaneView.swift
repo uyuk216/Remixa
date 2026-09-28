@@ -112,6 +112,9 @@ private struct ClipView: View {
         )
         .contextMenu {
             Button("複製") { project.duplicateClip(clip, on: track) }
+            Button("パート分離…") {
+                NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clip.id])
+            }
             Button("削除", role: .destructive) { project.deleteClip(clip, on: track) }
         }
     }

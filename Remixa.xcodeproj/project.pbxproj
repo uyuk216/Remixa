@@ -39,9 +39,12 @@
 		A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13754590A106AAAFCE1A319E /* EffectsRackView.swift */; };
 		B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE149128022845371FDB2EA /* ExportView.swift */; };
 		BC0C92E13600DD617068BECD /* AppLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F2309084ECC89E52783E32 /* AppLauncher.swift */; };
+		C438BB4027F120FCADEB6567 /* StemSeparationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A954E54BF63B8B250E00FE1 /* StemSeparationViews.swift */; };
 		CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */; };
 		D2609537D8C281327F21D241 /* TrackHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */; };
+		DC6E71244D80923D0BAB6342 /* StemSeparationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F7FD393D0DAE4D2DD4EB9D /* StemSeparationService.swift */; };
 		DDB073E17731142C649360D2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CE8E5ADAEA4AC28B405184B2 /* Sparkle */; };
+		E12E14D31A9AF34A4B9E9CEA /* StemEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB52E09B488BF139433C046 /* StemEnvironment.swift */; };
 		E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD70612A795902A7351612D0 /* EffectsRackSettings.swift */; };
 		E82F8AFB2F718E8EC9D1D763 /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6BEF61FA61CD60D31420288 /* WaveformView.swift */; };
 		FE7BB2E59D8FB210570205D7 /* TransportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516CFB7F305482893D941A0B /* TransportView.swift */; };
@@ -61,6 +64,7 @@
 		02AAD189A1D3E57B8DC78C39 /* MCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServer.swift; sourceTree = "<group>"; };
 		0688366C616C30695A03178A /* JSONHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONHelpers.swift; sourceTree = "<group>"; };
 		0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEngine.swift; sourceTree = "<group>"; };
+		0FB52E09B488BF139433C046 /* StemEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StemEnvironment.swift; sourceTree = "<group>"; };
 		13754590A106AAAFCE1A319E /* EffectsRackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackView.swift; sourceTree = "<group>"; };
 		22020D84CCFB026BD145F5DB /* RemixaCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = RemixaCLI; sourceTree = BUILT_PRODUCTS_DIR; };
 		28E813D3676DA68F21596C10 /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
@@ -71,8 +75,10 @@
 		3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineExporter.swift; sourceTree = "<group>"; };
 		47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioPCMBuffer+Editing.swift"; sourceTree = "<group>"; };
 		516CFB7F305482893D941A0B /* TransportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportView.swift; sourceTree = "<group>"; };
+		5A954E54BF63B8B250E00FE1 /* StemSeparationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StemSeparationViews.swift; sourceTree = "<group>"; };
 		6B343FADECE68CADAB245E88 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		6E01BC02B0DC524332C889FA /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		75F7FD393D0DAE4D2DD4EB9D /* StemSeparationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StemSeparationService.swift; sourceTree = "<group>"; };
 		776C82119C39B6D31D0BDC69 /* AudioExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioExporter.swift; sourceTree = "<group>"; };
 		7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipEditorSheet.swift; sourceTree = "<group>"; };
 		7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDocument.swift; sourceTree = "<group>"; };
@@ -130,6 +136,7 @@
 				F85A360B3B18F2E9CB4D5672 /* ContentView.swift */,
 				13754590A106AAAFCE1A319E /* EffectsRackView.swift */,
 				2DE149128022845371FDB2EA /* ExportView.swift */,
+				5A954E54BF63B8B250E00FE1 /* StemSeparationViews.swift */,
 				EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */,
 				6B343FADECE68CADAB245E88 /* TimelineView.swift */,
 				38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */,
@@ -213,6 +220,7 @@
 				E22BB2C170D98302D66B66F3 /* Control */,
 				5537E8F9DE49799B71073E52 /* Effects */,
 				E9941F7817C114BB84C670DE /* Models */,
+				EA66C7B83BC27FAD4215FD92 /* Separation */,
 				1F36BED6CAA4F55BE9BED4EA /* Views */,
 			);
 			path = Remixa;
@@ -226,6 +234,15 @@
 				33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		EA66C7B83BC27FAD4215FD92 /* Separation */ = {
+			isa = PBXGroup;
+			children = (
+				0FB52E09B488BF139433C046 /* StemEnvironment.swift */,
+				75F7FD393D0DAE4D2DD4EB9D /* StemSeparationService.swift */,
+			);
+			path = Separation;
 			sourceTree = "<group>";
 		};
 		F5A2435FE59D000FD1948B4E /* Audio */ = {
@@ -395,6 +412,9 @@
 				3A8C827820CEC1D31313B878 /* Project.swift in Sources */,
 				8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */,
 				9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */,
+				E12E14D31A9AF34A4B9E9CEA /* StemEnvironment.swift in Sources */,
+				DC6E71244D80923D0BAB6342 /* StemSeparationService.swift in Sources */,
+				C438BB4027F120FCADEB6567 /* StemSeparationViews.swift in Sources */,
 				7CBC31772F8E33D8782A62A5 /* TimelineEngine.swift in Sources */,
 				6856F1C014614AE634167121 /* TimelineExportView.swift in Sources */,
 				1496F4243D247F3ED90C7D21 /* TimelineExporter.swift in Sources */,
@@ -471,7 +491,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -583,7 +603,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;

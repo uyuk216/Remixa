@@ -204,6 +204,23 @@ enum MCPServer {
                 "path": prop("string", "音声ファイルのパス", "Audio file path")
              ], required: ["path"])),
 
+        Tool(name: "stems_status", method: "stems.status",
+             descriptionJA: "AI パート分離環境（Demucs）の状態を取得（notInstalled/installing/ready/failed）",
+             descriptionEN: "Get the AI stem-separation (Demucs) environment status (notInstalled/installing/ready/failed)",
+             schema: schema([:])),
+
+        Tool(name: "stems_install", method: "stems.install",
+             descriptionJA: "AI パート分離環境をインストール（初回のみ、約1GBのダウンロードが発生。完了まで待機）",
+             descriptionEN: "Install the AI stem-separation environment (first use only, ~1GB download; waits until finished)",
+             schema: schema([:])),
+
+        Tool(name: "stems_separate", method: "stems.separate",
+             descriptionJA: "クリップを AI でボーカル/ドラム等のパートに分離し、新規トラックを作成（初回は環境インストールで約1GBのダウンロードが発生。完了まで待機）",
+             descriptionEN: "AI-separate a clip into stems (vocals/drums/etc.) as new tracks (first use installs ~1GB; waits until finished)",
+             schema: schema([
+                "clipId": prop("string", "クリップ ID", "Clip ID")
+             ], required: ["clipId"])),
+
         Tool(name: "undo", method: "undo",
              descriptionJA: "直前の操作を取り消す",
              descriptionEN: "Undo the last operation",

@@ -94,6 +94,10 @@ final class ControlMethods {
         case "undo": try requireProject().undo(); return NSNull()
         case "redo": try requireProject().redo(); return NSNull()
 
+        case "stems.status": return stemsStatus()
+        case "stems.install": return try await stemsInstall()
+        case "stems.separate": return try await stemsSeparate(params)
+
         default:
             throw RPCError(code: -32601, message: "Unknown method: \(method)")
         }
@@ -171,10 +175,18 @@ final class ControlMethods {
 
     private func trackAdd(_ params: [String: Any]) throws -> Any {
         let project = try requireProject()
-        let name = params["name"] as? String ?? "新規トラック"
         var audioURL: URL?
         if let path = params["audioPath"] as? String { audioURL = URL(fileURLWithPath: path) }
-        let track = project.addTrack(named: name, audioURL: audioURL)
+
+        let track: Track
+        if let audioURL {
+            let name = (params["name"] as? String) ?? audioURL.deletingPathExtension().lastPathComponent
+            track = project.addTrackOrFillFirstEmpty(named: name, audioURL: audioURL)
+        } else {
+            let name = params["name"] as? String ?? "新規トラック"
+            track = project.addTrack(named: name, audioURL: nil)
+        }
+
         var result: [String: Any] = ["trackId": track.id.uuidString]
         if let clip = track.clips.first {
             result["clipId"] = clip.id.uuidString
@@ -435,6 +447,49 @@ final class ControlMethods {
             return ["path": path]
         } catch {
             throw RPCError.appFailure("書き出しに失敗しました: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - stems.*
+
+    private func stemsStatusString(_ status: StemEnvironment.Status) -> (String, String?) {
+        switch status {
+        case .notInstalled: return ("notInstalled", nil)
+        case .installing(_, let message): return ("installing", message)
+        case .ready: return ("ready", nil)
+        case .failed(let message): return ("failed", message)
+        }
+    }
+
+    private func stemsStatus() -> Any {
+        let (status, message) = stemsStatusString(StemEnvironment.shared.status)
+        var result: [String: Any] = ["status": status]
+        if let message { result["message"] = message }
+        return result
+    }
+
+    /// Waits for the (possibly ~1GB) stem-separation environment to install.
+    /// Long-running: callers must allow a generous (30 min) socket read timeout.
+    private func stemsInstall() async throws -> Any {
+        await StemEnvironment.shared.install(progress: { _, _ in })
+        let (status, message) = stemsStatusString(StemEnvironment.shared.status)
+        var result: [String: Any] = ["status": status]
+        if let message { result["message"] = message }
+        return result
+    }
+
+    /// Runs AI stem separation on a clip and creates one new track per stem.
+    /// Long-running: callers must allow a generous (30 min) socket read timeout.
+    private func stemsSeparate(_ params: [String: Any]) async throws -> Any {
+        guard let clipIdString = params["clipId"] as? String, let clipId = UUID(uuidString: clipIdString) else {
+            throw RPCError.invalidParams("clipIdが必要です")
+        }
+        let project = try requireProject()
+        do {
+            let trackIds = try await project.separateIntoStems(clipId: clipId)
+            return ["trackIds": trackIds.map { $0.uuidString }]
+        } catch {
+            throw RPCError.appFailure("パート分離に失敗しました: \(error.localizedDescription)")
         }
     }
 
