@@ -49,18 +49,26 @@ final class AIAssistantRunner: ObservableObject {
                 "-p", prompt,
                 "--mcp-config", tmpURL.path,
                 "--allowedTools", "mcp__remixa__*",
+                "--permission-mode", "dontAsk",
                 "--output-format", "text"
             ]
         case .codex:
             mcpConfigURL = nil
             process.arguments = [
                 "exec", "--skip-git-repo-check",
+                // ユーザーのconfig.toml(未対応モデル指定や他のMCP)を読まず、認証だけ使う
+                "--ignore-user-config",
+                // 非対話で承認待ちにならないよう、remixa MCPツールだけ承認不要にする(sandboxはread-onlyのまま)
+                "-c", "approval_policy=\"never\"",
+                "-c", "mcp_servers.remixa.default_tools_approval_mode=\"approve\"",
                 "-c", "mcp_servers.remixa.command=\"\(mcpCommand)\"",
                 "-c", "mcp_servers.remixa.args=[\"mcp\"]",
                 prompt
             ]
         }
 
+        process.environment = AIBackendLocator.childEnvironment(executablePath: executablePath)
+        process.standardInput = FileHandle.nullDevice
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
@@ -108,5 +116,10 @@ final class AIAssistantRunner: ObservableObject {
     func cancel() {
         guard let process, process.isRunning else { return }
         process.terminate()
+        let pid = process.processIdentifier
+        // Escalate if the CLI ignores SIGTERM.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+            if process.isRunning { kill(pid, SIGKILL) }
+        }
     }
 }

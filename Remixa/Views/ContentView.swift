@@ -36,6 +36,7 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(minWidth: 560, minHeight: 420)
         .onAppear {
             timelineEngine.attach(project: project)
         }
@@ -70,49 +71,63 @@ struct ContentView: View {
     }
 
     private var toolbar: some View {
+        ViewThatFits(in: .horizontal) {
+            toolbarContent(compact: false, showVolume: true)
+            toolbarContent(compact: true, showVolume: true)
+            toolbarContent(compact: true, showVolume: false)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func toolbarButton(_ title: String, _ icon: String, compact: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if compact {
+                Label(title, systemImage: icon).labelStyle(.iconOnly)
+            } else {
+                Label(title, systemImage: icon).lineLimit(1).fixedSize()
+            }
+        }
+        .help(title)
+    }
+
+    private func toolbarContent(compact: Bool, showVolume: Bool) -> some View {
         HStack {
-            Button { addAudioTrack() } label: {
-                Label("音声を追加", systemImage: "waveform.badge.plus")
-            }
-            Button { openProjectPanel() } label: {
-                Label("プロジェクトを開く", systemImage: "folder")
-            }
-            Button { saveProject(saveAs: false) } label: {
-                Label("保存", systemImage: "square.and.arrow.down")
-            }
-            Spacer()
-            Text(project.fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト")
-                .foregroundStyle(.secondary)
-            if project.isDirty {
-                Text("•").foregroundStyle(.orange)
-            }
-            Spacer()
+            toolbarButton("音声を追加", "waveform.badge.plus", compact: compact) { addAudioTrack() }
+            toolbarButton("プロジェクトを開く", "folder", compact: compact) { openProjectPanel() }
+            toolbarButton("保存", "square.and.arrow.down", compact: compact) { saveProject(saveAs: false) }
+            Spacer(minLength: 8)
             HStack(spacing: 4) {
-                Image(systemName: "speaker.wave.3")
-                Slider(value: $project.masterVolume, in: 0...1.5)
-                    .frame(width: 100)
+                Text(project.fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if project.isDirty {
+                    Text("•").foregroundStyle(.orange)
+                }
             }
-            Button {
-                showExportSheet = true
-            } label: {
-                Label("ミックスを書き出し", systemImage: "square.and.arrow.up")
+            .layoutPriority(-1)
+            Spacer(minLength: 8)
+            if showVolume {
+                HStack(spacing: 4) {
+                    Image(systemName: "speaker.wave.3")
+                    Slider(value: $project.masterVolume, in: 0...1.5)
+                        .frame(width: 100)
+                }
             }
-            .disabled(project.projectDuration <= 0)
-            Button {
+            toolbarButton("ミックスを書き出し", "square.and.arrow.up", compact: compact) { showExportSheet = true }
+                .disabled(project.projectDuration <= 0)
+            toolbarButton("パート分離", "waveform.and.mic", compact: compact) {
                 if let clipId = project.selectedClipID {
                     NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clipId])
                 }
-            } label: {
-                Label("パート分離", systemImage: "waveform.and.mic")
             }
             .disabled(project.selectedClipID == nil)
-            Button {
+            toolbarButton("AIアシスタント", "sparkles", compact: compact) {
                 withAnimation { showAIPanel.toggle() }
-            } label: {
-                Label("AIアシスタント", systemImage: "sparkles")
             }
         }
-        .padding()
     }
 
     private func addAudioTrack() {

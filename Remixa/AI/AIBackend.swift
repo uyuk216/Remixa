@@ -46,7 +46,7 @@ enum AIBackendLocator {
         let pathEnv = ProcessInfo.processInfo.environment["PATH"] ?? ""
         let pathDirs = pathEnv.split(separator: ":").map(String.init)
         var seen = Set<String>()
-        for dir in pathDirs + extraSearchDirs {
+        for dir in pathDirs + searchDirs() {
             guard seen.insert(dir).inserted else { continue }
             let candidate = (dir as NSString).appendingPathComponent(kind.executableName)
             if FileManager.default.isExecutableFile(atPath: candidate) {
@@ -54,5 +54,32 @@ enum AIBackendLocator {
             }
         }
         return nil
+    }
+
+    /// PATH-ish directories a GUI-launched app usually lacks (node for `#!/usr/bin/env node` CLIs).
+    static func searchDirs() -> [String] {
+        let home = NSHomeDirectory()
+        var dirs = extraSearchDirs + [home + "/.volta/bin", home + "/.bun/bin", home + "/.cargo/bin",
+                                      home + "/.asdf/shims", home + "/.local/share/fnm/aliases/default/bin"]
+        let fm = FileManager.default
+        let nvm = home + "/.nvm/versions/node"
+        if let vers = try? fm.contentsOfDirectory(atPath: nvm) {
+            for v in vers.sorted(by: { $0.compare($1, options: .numeric) == .orderedDescending }) {
+                dirs.append("\(nvm)/\(v)/bin")
+            }
+        }
+        return dirs
+    }
+
+    /// Environment for the child CLI: current env with an enriched PATH.
+    static func childEnvironment(executablePath: String) -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let current = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        let all = [(executablePath as NSString).deletingLastPathComponent] + searchDirs()
+            + current + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        var seen = Set<String>()
+        env["PATH"] = all.filter { !$0.isEmpty && seen.insert($0).inserted }.joined(separator: ":")
+        if env["HOME"] == nil { env["HOME"] = NSHomeDirectory() }
+        return env
     }
 }

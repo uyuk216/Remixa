@@ -281,6 +281,7 @@ final class RemixaProject: ObservableObject {
         if isNewAndUntouched {
             let track = tracks[0]
             addClip(to: track, audioURL: audioURL, atTimelineStart: timelineStart)
+            if !track.clips.isEmpty { track.name = name }
             return track
         }
         return addTrack(named: name, audioURL: audioURL, at: timelineStart)
