@@ -42,6 +42,7 @@ struct ContentView: View {
         }
         .onChange(of: project.tracks.count) { _, _ in timelineEngine.rebuildGraph() }
         .onChange(of: project.mixStateRevision) { _, _ in timelineEngine.syncMixState() }
+        .onChange(of: project.bpm) { _, _ in timelineEngine.refreshPlaybackSchedule() }
         .onReceive(NotificationCenter.default.publisher(for: .remixaAddAudioTrack)) { _ in
             addAudioTrack()
         }

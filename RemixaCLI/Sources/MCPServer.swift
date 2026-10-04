@@ -116,16 +116,26 @@ enum MCPServer {
              ], required: ["trackId", "audioPath"])),
 
         Tool(name: "clip_update", method: "clip.update",
-             descriptionJA: "クリップの位置・長さ・ゲイン・フェードを更新",
-             descriptionEN: "Update a clip's position, length, gain, or fades",
+             descriptionJA: "クリップの位置・長さ・ゲイン・フェード・テンポ同期設定を更新",
+             descriptionEN: "Update a clip's position, length, gain, fades, or tempo sync settings",
              schema: schema([
                 "clipId": prop("string", "クリップ ID", "Clip ID"),
                 "start": prop("number", "開始位置（秒、省略可）", "Start time in seconds (optional)"),
                 "sourceStart": prop("number", "ソース内開始位置（秒、省略可）", "Source-relative start time (optional)"),
-                "duration": prop("number", "長さ（秒、省略可）", "Duration in seconds (optional)"),
+                "duration": prop("number", "タイムライン上の長さ（秒、省略可）", "Timeline length in seconds (optional)"),
+                "tempoRate": prop("number", "テンポ倍率 0.5〜2.0（省略可）", "Tempo rate 0.5-2.0 (optional)", extra: ["minimum": 0.5, "maximum": 2.0]),
+                "sourceBPM": prop("number", "元音源の BPM。null を指定すると解除（省略可）", "Source BPM; null clears it (optional)", extra: ["type": ["number", "null"]]),
+                "syncToProject": prop("boolean", "プロジェクト BPM への同期（省略可）", "Sync to project BPM (optional)"),
                 "gain": prop("number", "ゲイン（省略可）", "Gain (optional)"),
                 "fadeIn": prop("number", "フェードイン（秒、省略可）", "Fade in seconds (optional)"),
                 "fadeOut": prop("number", "フェードアウト（秒、省略可）", "Fade out seconds (optional)")
+             ], required: ["clipId"])),
+
+        Tool(name: "clip_sync_tempo", method: "clip.syncTempo",
+             descriptionJA: "クリップのテンポをプロジェクト BPM に合わせて同期を有効にする",
+             descriptionEN: "Match a clip's tempo to the project BPM and enable sync",
+             schema: schema([
+                "clipId": prop("string", "クリップ ID", "Clip ID")
              ], required: ["clipId"])),
 
         Tool(name: "clip_split", method: "clip.split",

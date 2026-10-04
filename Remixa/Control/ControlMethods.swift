@@ -60,8 +60,7 @@ final class ControlMethods {
         case "project.setBPM":
             let project = try requireProject()
             guard let bpm = params.number("bpm") else { throw RPCError.invalidParams("bpmが必要です") }
-            project.pushUndo()
-            project.bpm = bpm
+            project.setBPM(bpm)
             return NSNull()
 
         case "track.add": return try trackAdd(params)
@@ -71,6 +70,7 @@ final class ControlMethods {
 
         case "clip.add": return try clipAdd(params)
         case "clip.update": try clipUpdate(params); return NSNull()
+        case "clip.syncTempo": try clipSyncTempo(params); return NSNull()
         case "clip.split": return try clipSplit(params)
         case "clip.duplicate": return try clipDuplicate(params)
         case "clip.remove": try clipRemove(params); return NSNull()
@@ -241,16 +241,41 @@ final class ControlMethods {
         let project = try requireProject()
         let (track, index) = try findClip(idString: clipId)
         let clip = track.clips[index]
+        let sourceBPM: Double??
+        if let sourceBPMValue = params["sourceBPM"] {
+            if sourceBPMValue is NSNull {
+                sourceBPM = .some(nil)
+            } else if let value = params.number("sourceBPM") {
+                sourceBPM = .some(value)
+            } else {
+                throw RPCError.invalidParams("sourceBPMは数値またはnullで指定してください")
+            }
+        } else {
+            sourceBPM = nil
+        }
         project.updateClip(
             clip,
             on: track,
             timelineStart: params.number("start"),
             sourceStart: params.number("sourceStart"),
             duration: params.number("duration"),
+            tempoRate: params.number("tempoRate"),
+            sourceBPM: sourceBPM,
+            syncToProject: params["syncToProject"] as? Bool,
             gain: params.number("gain"),
             fadeIn: params.number("fadeIn"),
             fadeOut: params.number("fadeOut")
         )
+        timelineEngine?.refreshPlaybackSchedule()
+    }
+
+    private func clipSyncTempo(_ params: [String: Any]) throws {
+        guard let clipIdString = params["clipId"] as? String,
+              let clipId = UUID(uuidString: clipIdString) else {
+            throw RPCError.invalidParams("有効なclipIdが必要です")
+        }
+        try requireProject().syncClipTempo(clipId: clipId)
+        timelineEngine?.refreshPlaybackSchedule()
     }
 
     private func clipSplit(_ params: [String: Any]) throws -> Any {

@@ -64,7 +64,7 @@ private struct ClipView: View {
 
     private let handleWidth: CGFloat = 7
 
-    private var clipWidth: CGFloat { max(10, CGFloat(clip.duration) * pixelsPerSecond) }
+    private var clipWidth: CGFloat { max(10, CGFloat(clip.timelineDuration) * pixelsPerSecond) }
     private var clipX: CGFloat { CGFloat(clip.timelineStart + dragOffsetSeconds) * pixelsPerSecond }
 
     var body: some View {
@@ -85,6 +85,11 @@ private struct ClipView: View {
                     .lineLimit(1)
                     .padding(.horizontal, 4)
                     .padding(.top, 2)
+                Text(tempoSummary)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
                 Spacer()
             }
             HStack(spacing: 0) {
@@ -111,12 +116,27 @@ private struct ClipView: View {
                 }
         )
         .contextMenu {
+            Button("テンポ/BPMを編集…") { onDoubleTap() }
+            Menu("音源内容をナッジ") {
+                Button("前へ 10 ms") { project.nudgeClipContent(clip, on: track, by: -0.01) }
+                Button("後ろへ 10 ms") { project.nudgeClipContent(clip, on: track, by: 0.01) }
+                Divider()
+                Button("前へ 1 拍") { project.nudgeClipContent(clip, on: track, by: -60.0 / max(project.bpm, 1)) }
+                Button("後ろへ 1 拍") { project.nudgeClipContent(clip, on: track, by: 60.0 / max(project.bpm, 1)) }
+            }
+            Divider()
             Button("複製") { project.duplicateClip(clip, on: track) }
             Button("パート分離…") {
                 NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clip.id])
             }
             Button("削除", role: .destructive) { project.deleteClip(clip, on: track) }
         }
+    }
+
+    private var tempoSummary: String {
+        let rate = String(format: "%.2f×", clip.tempoRate)
+        let bpm = clip.sourceBPM.map { String(format: "%.0f BPM", $0) } ?? "元BPM未設定"
+        return "\(rate) · \(bpm)\(clip.syncToProject ? " · 同期" : "")"
     }
 
     /// Builds the waveform stroke path for the visible (trimmed) portion of the clip,
@@ -167,15 +187,16 @@ private struct ClipView: View {
 
     private func applyTrim(leading: Bool, translation: Double, commit: Bool = false) {
         let deltaSeconds = translation / pixelsPerSecond
+        let sourceDelta = deltaSeconds * clip.tempoRate
         if leading {
             let newStart = max(0, clip.timelineStart + deltaSeconds)
-            let newSourceStart = max(0, clip.sourceStart + (newStart - clip.timelineStart))
-            let newDuration = clip.duration - (newStart - clip.timelineStart)
+            let newSourceStart = max(0, clip.sourceStart + (newStart - clip.timelineStart) * clip.tempoRate)
+            let newDuration = clip.duration - (newStart - clip.timelineStart) * clip.tempoRate
             if commit, newDuration > 0.05 {
                 project.trimClip(clip, on: track, newStart: newStart, newDuration: newDuration, newSourceStart: newSourceStart)
             }
         } else {
-            let newDuration = max(0.05, clip.duration + deltaSeconds)
+            let newDuration = max(0.05, clip.duration + sourceDelta)
             if commit {
                 project.trimClip(clip, on: track, newStart: clip.timelineStart, newDuration: newDuration, newSourceStart: clip.sourceStart)
             }

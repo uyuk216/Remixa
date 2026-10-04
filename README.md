@@ -9,6 +9,7 @@ Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swi
 - DJ 風の音源編集（v0.1）
 - シンプルなマルチトラック DAW（v0.2）
 - AI によるステム分離（v0.3。モデルは初回利用時にダウンロードされ、アプリには同梱されません）
+- クリップ単位のテンポ同期（v0.4）
 
 ### v0.1 の主な機能
 
@@ -34,7 +35,6 @@ Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swi
 
 #### v0.2 の既知の制限
 
-- タイムライン上ではクリップの再生速度・ピッチは変更されません（テンポ/ピッチ変更は v0.1 の単体エディタでクリップを開いて適用してください）
 - `.remixa` はアトミックな `FileWrapper` 書き込みではなく通常のディレクトリへのコピーで保存されるため、保存中の強制終了に対する耐性は限定的です
 
 ### v0.3 の主な機能（AI パート分離）
@@ -54,6 +54,13 @@ remixa split ~/Music/song.wav          # 音声を追加してすぐパート分
 ```
 
 MCP からは `stems_status` / `stems_install` / `stems_separate` ツールとして呼び出せます。いずれも初回は約 1GB のダウンロードが発生し得るため、`stems_install` と `stems_separate`（および `export_mix`）は完了まで最大 30 分程度ブロックする可能性があります。
+
+### v0.4 の主な機能（クリップ単位のテンポ同期）
+
+- クリップごとにテンポ倍率（0.5〜2.0）を設定できます。ピッチを保ったまま再生・書き出しでき、タイムライン上の長さも倍率に合わせて変わります
+- 「BPM に合わせる」でクリップの元 BPM からプロジェクト BPM に同期できます。元 BPM が未設定なら音源から推定して保存します。同期を有効にしたクリップは、プロジェクト BPM の変更にも追従します
+- 拍グリッドへの開始位置スナップと、クリップ内の音源内容を ±10 ms / ±1 拍ずらすナッジに対応します
+- テンポ倍率と元 BPM はクリップ上に表示され、編集シートから同期設定を変更できます。テンポ設定は保存・読み込み、Undo/Redo、トリム、分割、複製にも保持されます
 
 ## インストール（Releases から）
 
@@ -97,6 +104,8 @@ remixa export ~/Desktop/mix.wav        # ミックスを書き出し
 remixa analyze ~/Music/loop.wav        # 音声ファイルを解析
 remixa state                           # プロジェクト全体の状態を JSON で取得
 remixa call track.update '{"trackId":"...","volume":0.8}'  # 任意の RPC を直接呼ぶ
+remixa call clip.update '{"clipId":"...","tempoRate":1.1,"sourceBPM":120,"syncToProject":true}'
+remixa call clip.syncTempo '{"clipId":"..."}'  # プロジェクト BPM に合わせて同期
 ```
 
 ### Claude Code から使う
@@ -148,6 +157,7 @@ xcodebuild -project Remixa.xcodeproj -scheme Remixa -configuration Debug build
 - **v0.1**: DJ 風の波形編集、テンポ/ピッチ変更、エフェクトラック、書き出し
 - **v0.2**（本リリース）: シンプルなマルチトラック DAW（タイムライン、クリップ編集、トラックミキサー、プロジェクト保存/読み込み、ミックス書き出し）
 - **v0.3**（本リリース）: AI によるステム分離（Demucs、モデルは初回利用時にダウンロード）、CLI/MCP からの `stems status`/`install`/`separate` 操作
+- **v0.4**: クリップ単位のテンポ同期、プロジェクト BPM への自動追従、拍スナップとナッジ、CLI/MCP の `clip.update` / `clip.syncTempo` 操作
 
 ## ライセンス
 

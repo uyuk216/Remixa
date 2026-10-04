@@ -14,6 +14,9 @@ struct Clip: Identifiable, Codable, Equatable {
     var timelineStart: Double   // seconds, position on the shared timeline
     var sourceStart: Double     // seconds trimmed from the start of the source file
     var duration: Double        // seconds of source actually played (post-trim)
+    var tempoRate: Double = 1.0 // playback rate; duration remains measured in source seconds
+    var sourceBPM: Double?
+    var syncToProject: Bool = false
 
     var gain: Double = 1.0          // 0...2
     var fadeIn: Double = 0          // seconds
@@ -29,7 +32,49 @@ struct Clip: Identifiable, Codable, Equatable {
         self.duration = duration
     }
 
-    var timelineEnd: Double { timelineStart + duration }
+    private enum CodingKeys: String, CodingKey {
+        case id, name, audioPath, isRelative, timelineStart, sourceStart, duration
+        case gain, fadeIn, fadeOut, tempoRate, sourceBPM, syncToProject
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        audioPath = try c.decode(String.self, forKey: .audioPath)
+        isRelative = try c.decode(Bool.self, forKey: .isRelative)
+        timelineStart = try c.decode(Double.self, forKey: .timelineStart)
+        sourceStart = try c.decode(Double.self, forKey: .sourceStart)
+        duration = try c.decode(Double.self, forKey: .duration)
+        gain = try c.decodeIfPresent(Double.self, forKey: .gain) ?? 1.0
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
+        let decodedRate = try c.decodeIfPresent(Double.self, forKey: .tempoRate) ?? 1.0
+        tempoRate = decodedRate.isFinite ? min(2.0, max(0.5, decodedRate)) : 1.0
+        let decodedBPM = try c.decodeIfPresent(Double.self, forKey: .sourceBPM)
+        sourceBPM = decodedBPM.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        syncToProject = try c.decodeIfPresent(Bool.self, forKey: .syncToProject) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(audioPath, forKey: .audioPath)
+        try c.encode(isRelative, forKey: .isRelative)
+        try c.encode(timelineStart, forKey: .timelineStart)
+        try c.encode(sourceStart, forKey: .sourceStart)
+        try c.encode(duration, forKey: .duration)
+        try c.encode(gain, forKey: .gain)
+        try c.encode(fadeIn, forKey: .fadeIn)
+        try c.encode(fadeOut, forKey: .fadeOut)
+        try c.encode(tempoRate, forKey: .tempoRate)
+        try c.encodeIfPresent(sourceBPM, forKey: .sourceBPM)
+        try c.encode(syncToProject, forKey: .syncToProject)
+    }
+
+    var timelineDuration: Double { duration / min(2.0, max(0.5, tempoRate)) }
+    var timelineEnd: Double { timelineStart + timelineDuration }
 
     /// Resolves the absolute file URL for this clip's source audio, given the
     /// package's Audio directory (used once `isRelative` is true after a save).
@@ -329,6 +374,19 @@ final class RemixaProject: ObservableObject {
         mixStateRevision &+= 1
     }
 
+    func setBPM(_ value: Double) {
+        guard value.isFinite, value > 0, value != bpm else { return }
+        pushUndo()
+        bpm = value
+        for track in tracks {
+            for index in track.clips.indices where track.clips[index].syncToProject {
+                guard let sourceBPM = track.clips[index].sourceBPM,
+                      let rate = Self.tempoRate(projectBPM: value, sourceBPM: sourceBPM) else { continue }
+                track.clips[index].tempoRate = rate
+            }
+        }
+    }
+
     /// Applies a complete track mixer update as one undoable edit.
     func updateTrack(
         _ track: Track,
@@ -365,7 +423,7 @@ final class RemixaProject: ObservableObject {
         let track = Track(name: name)
         if let audioURL, let buffer = try? loadBuffer(for: audioURL) {
             let duration = Double(buffer.frameLength) / buffer.format.sampleRate
-            track.clips.append(Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: timelineStart, sourceStart: 0, duration: duration))
+            track.clips.append(Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration))
         }
         tracks.append(track)
         return track
@@ -413,17 +471,34 @@ final class RemixaProject: ObservableObject {
         }
         pushUndo()
         let duration = Double(buffer.frameLength) / buffer.format.sampleRate
-        let clip = Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, timelineStart), sourceStart: 0, duration: duration)
+        let clip = Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration)
         track.clips.append(clip)
         objectWillChange.send()
     }
 
     func moveClip(_ clip: Clip, on track: Track, toTimelineStart newStart: Double, recordUndo: Bool = true) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
-        cancelActiveStemSeparations(forClipID: clip.id)
-        if recordUndo { pushUndo() }
         var updated = track.clips[index]
         updated.timelineStart = max(0, snapped(newStart))
+        guard updated != track.clips[index] else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
+        if recordUndo { registerEdit() }
+        track.clips[index] = updated
+        objectWillChange.send()
+    }
+
+    /// Slips the source audio under the clip without moving its timeline edges.
+    func nudgeClipContent(_ clip: Clip, on track: Track, by timelineSeconds: Double) {
+        guard timelineSeconds.isFinite,
+              let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        var updated = track.clips[index]
+        guard let source = buffer(for: updated) else { return }
+        let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+        let latestStart = max(0, sourceDuration - updated.duration)
+        updated.sourceStart = min(latestStart, max(0, updated.sourceStart + timelineSeconds * updated.tempoRate))
+        guard updated != track.clips[index] else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
+        registerEdit()
         track.clips[index] = updated
         objectWillChange.send()
     }
@@ -449,12 +524,17 @@ final class RemixaProject: ObservableObject {
         objectWillChange.send()
     }
 
+    /// Updates clip state. A supplied `duration` is measured in timeline seconds;
+    /// the source-region duration is adjusted using the resulting tempo rate.
     func updateClip(
         _ clip: Clip,
         on track: Track,
         timelineStart: Double? = nil,
         sourceStart: Double? = nil,
         duration: Double? = nil,
+        tempoRate: Double? = nil,
+        sourceBPM: Double?? = nil,
+        syncToProject: Bool? = nil,
         gain: Double? = nil,
         fadeIn: Double? = nil,
         fadeOut: Double? = nil
@@ -462,6 +542,39 @@ final class RemixaProject: ObservableObject {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
         var updated = track.clips[index]
         if let timelineStart { updated.timelineStart = max(0, timelineStart) }
+        var manuallyChangedRate = false
+        if let tempoRate, tempoRate.isFinite {
+            let clampedRate = min(2.0, max(0.5, tempoRate))
+            manuallyChangedRate = clampedRate != updated.tempoRate
+            updated.tempoRate = clampedRate
+        }
+        if let sourceBPM {
+            updated.sourceBPM = sourceBPM.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            if sourceBPM == nil, syncToProject == nil {
+                updated.syncToProject = false
+            }
+        }
+        if let syncToProject {
+            updated.syncToProject = syncToProject
+        } else if manuallyChangedRate {
+            // An explicit manual rate detaches the clip unless the caller also
+            // explicitly requests project synchronization.
+            updated.syncToProject = false
+        }
+        if updated.syncToProject {
+            if updated.sourceBPM == nil, let source = buffer(for: updated) {
+                updated.sourceBPM = BPMEstimator.estimate(buffer: source)
+            }
+            if let sourceBPM = updated.sourceBPM,
+               let rate = Self.tempoRate(projectBPM: bpm, sourceBPM: sourceBPM) {
+                updated.tempoRate = rate
+            } else if syncToProject == true {
+                // Do not leave a clip marked as synced when there is no BPM to
+                // follow. The explicit clip.syncTempo path reports this as an error.
+                updated.syncToProject = false
+            }
+        }
+        let requestedSourceDuration = duration.map { max(0.02, $0 * updated.tempoRate) }
         if sourceStart != nil || duration != nil {
             if let source = buffer(for: updated) {
                 let sourceDuration = Double(source.frameLength) / source.format.sampleRate
@@ -469,10 +582,10 @@ final class RemixaProject: ObservableObject {
                 let latestStart = max(0, sourceDuration - minimumDuration)
                 updated.sourceStart = min(max(0, sourceStart ?? updated.sourceStart), latestStart)
                 let availableDuration = max(minimumDuration, sourceDuration - updated.sourceStart)
-                updated.duration = min(max(minimumDuration, duration ?? updated.duration), availableDuration)
+                updated.duration = min(max(minimumDuration, requestedSourceDuration ?? updated.duration), availableDuration)
             } else {
                 if let sourceStart { updated.sourceStart = max(0, sourceStart) }
-                if let duration { updated.duration = max(0.02, duration) }
+                if let requestedSourceDuration { updated.duration = requestedSourceDuration }
             }
         }
         if let gain { updated.gain = gain }
@@ -480,9 +593,52 @@ final class RemixaProject: ObservableObject {
         if let fadeOut { updated.fadeOut = fadeOut }
         guard updated != track.clips[index] else { return }
         cancelActiveStemSeparations(forClipID: clip.id)
-        pushUndo()
+        registerEdit()
         track.clips[index] = updated
         objectWillChange.send()
+    }
+
+    /// Estimates a missing source BPM, applies the project tempo, and enables
+    /// automatic follow when the project BPM changes later.
+    func syncClipTempo(clipId: UUID, sourceBPM overrideBPM: Double? = nil) throws {
+        guard let (track, clip) = findClip(clipId),
+              let index = track.clips.firstIndex(where: { $0.id == clipId }) else {
+            throw NSError(domain: "Remixa", code: 50, userInfo: [NSLocalizedDescriptionKey: "クリップが見つかりません"])
+        }
+        let sourceBPM: Double
+        if let overrideBPM {
+            guard overrideBPM.isFinite, overrideBPM > 0 else {
+                throw NSError(domain: "Remixa", code: 51, userInfo: [NSLocalizedDescriptionKey: "元BPMは0より大きい数値を入力してください"])
+            }
+            sourceBPM = overrideBPM
+        } else if let existing = clip.sourceBPM {
+            sourceBPM = existing
+        } else if let source = buffer(for: clip), let estimate = BPMEstimator.estimate(buffer: source) {
+            sourceBPM = estimate
+        } else {
+            throw NSError(domain: "Remixa", code: 51, userInfo: [NSLocalizedDescriptionKey: "元BPMを推定できませんでした。元BPMを入力してください"])
+        }
+        guard let rate = Self.tempoRate(projectBPM: bpm, sourceBPM: sourceBPM) else {
+            throw NSError(domain: "Remixa", code: 52, userInfo: [NSLocalizedDescriptionKey: "プロジェクトBPMまたは元BPMが不正です"])
+        }
+        var updated = track.clips[index]
+        updated.sourceBPM = sourceBPM
+        updated.tempoRate = rate
+        updated.syncToProject = true
+        guard updated != track.clips[index] else { return }
+        cancelActiveStemSeparations(forClipID: clipId)
+        registerEdit()
+        track.clips[index] = updated
+        objectWillChange.send()
+    }
+
+    private static func tempoRate(projectBPM: Double, sourceBPM: Double) -> Double? {
+        guard projectBPM.isFinite, projectBPM > 0, sourceBPM.isFinite, sourceBPM > 0 else { return nil }
+        var rate = projectBPM / sourceBPM
+        guard rate.isFinite, rate > 0 else { return nil }
+        while rate < 0.5 { rate *= 2 }
+        while rate > 2.0 { rate /= 2 }
+        return min(2.0, max(0.5, rate))
     }
 
     func splitClip(_ clip: Clip, on track: Track, at playhead: Double) {
@@ -490,7 +646,7 @@ final class RemixaProject: ObservableObject {
               playhead > clip.timelineStart, playhead < clip.timelineEnd else { return }
         cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
-        let offset = playhead - clip.timelineStart
+        let offset = min(clip.duration, max(0, playhead - clip.timelineStart) * clip.tempoRate)
         var first = clip
         first.duration = offset
         var second = clip
@@ -507,7 +663,7 @@ final class RemixaProject: ObservableObject {
         pushUndo()
         var copy = clip
         copy.id = UUID()
-        copy.timelineStart = clip.timelineEnd
+        copy.timelineStart = max(0, snapped(clip.timelineEnd))
         track.clips.append(copy)
         objectWillChange.send()
     }

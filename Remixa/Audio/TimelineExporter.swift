@@ -53,8 +53,12 @@ enum TimelineExporter {
             let player = playerNodes[index]
             player.play()
             for clip in track.clips {
-                guard let source = track.buffers[clip.audioPath],
-                      let processed = TimelineEngine.processedBuffer(for: clip, source: source) else { continue }
+                guard let source = track.buffers[clip.audioPath] else { continue }
+                guard let processed = TimelineEngine.processedBuffer(for: clip, source: source) else {
+                    throw NSError(domain: "Remixa", code: 31, userInfo: [
+                        NSLocalizedDescriptionKey: "クリップ「\(clip.name)」のテンポ変換に失敗しました"
+                    ])
+                }
                 let delaySeconds = clip.timelineStart
                 let sampleTime = AVAudioFramePosition(delaySeconds * renderFormat.sampleRate)
                 let atTime = AVAudioTime(sampleTime: sampleTime, atRate: renderFormat.sampleRate)

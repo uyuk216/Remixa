@@ -105,8 +105,11 @@ final class TimelineEngine: ObservableObject {
             guard let nodes = perTrack[track.id] else { continue }
             nodes.player.stop()
             for clip in track.clips where clip.timelineEnd > startTime {
-                guard let sourceBuffer = project.buffer(for: clip),
-                      let processed = TimelineEngine.processedBuffer(for: clip, source: sourceBuffer) else { continue }
+                guard let sourceBuffer = project.buffer(for: clip) else { continue }
+                guard let processed = TimelineEngine.processedBuffer(for: clip, source: sourceBuffer) else {
+                    project.errorMessage = "クリップ「\(clip.name)」のテンポ変換に失敗しました"
+                    continue
+                }
                 let clipInnerOffset = max(0, startTime - clip.timelineStart)
                 let framesPerSecond = processed.format.sampleRate
                 let sliceStart = AVAudioFramePosition(clipInnerOffset * framesPerSecond)
@@ -145,6 +148,17 @@ final class TimelineEngine: ObservableObject {
         if wasPlaying { _ = play() }
     }
 
+    /// Rebuilds scheduled clip buffers at the current playhead after tempo edits.
+    func refreshPlaybackSchedule() {
+        guard isPlaying else { return }
+        let resumeAt = currentTime
+        for nodes in perTrack.values { nodes.player.stop() }
+        isPlaying = false
+        stopDisplayTimer()
+        currentTime = resumeAt
+        _ = play()
+    }
+
     private func startDisplayTimer() {
         stopDisplayTimer()
         displayTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
@@ -181,8 +195,9 @@ final class TimelineEngine: ObservableObject {
         let converted = BufferFormatConverter.convert(source, to: projectFormat) ?? source
         let sampleRate = converted.format.sampleRate
         let startFrame = AVAudioFramePosition(clip.sourceStart * sampleRate)
-        let endFrame = startFrame + AVAudioFramePosition(clip.duration * sampleRate)
+        let endFrame = min(AVAudioFramePosition(converted.frameLength), startFrame + AVAudioFramePosition(clip.duration * sampleRate))
         guard let slice = converted.slice(from: startFrame, to: endFrame) else { return nil }
+        let rate = min(2.0, max(0.5, clip.tempoRate))
 
         if let data = slice.floatChannelData {
             let channelCount = Int(slice.format.channelCount)
@@ -195,13 +210,100 @@ final class TimelineEngine: ObservableObject {
             }
         }
         if clip.fadeIn > 0 {
-            slice.applyFade(from: 0, to: AVAudioFramePosition(clip.fadeIn * sampleRate), fadeIn: true)
+            slice.applyFade(from: 0, to: AVAudioFramePosition(clip.fadeIn * rate * sampleRate), fadeIn: true)
         }
         if clip.fadeOut > 0 {
-            let start = AVAudioFramePosition(max(0, Double(slice.frameLength) / sampleRate - clip.fadeOut) * sampleRate)
+            let start = AVAudioFramePosition(max(0, Double(slice.frameLength) / sampleRate - clip.fadeOut * rate) * sampleRate)
             slice.applyFade(from: start, to: AVAudioFramePosition(slice.frameLength), fadeIn: false)
         }
-        return slice
+        return rate == 1.0 ? slice : timeStretchedBuffer(slice, rate: rate)
+    }
+
+    /// Stretches a clip independently so clips that overlap on one track can each
+    /// have their own tempo rate. AVAudioUnitTimePitch keeps pitch at 0 semitones.
+    private nonisolated static func timeStretchedBuffer(_ buffer: AVAudioPCMBuffer, rate: Double) -> AVAudioPCMBuffer? {
+        let format = buffer.format
+        let expectedFrameCount = AVAudioFrameCount(max(1, (Double(buffer.frameLength) / rate).rounded()))
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        let timePitch = AVAudioUnitTimePitch()
+        timePitch.rate = Float(rate)
+        timePitch.pitch = 0
+        engine.attach(player)
+        engine.attach(timePitch)
+        engine.connect(player, to: timePitch, format: format)
+        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+
+        let maxFrames: AVAudioFrameCount = 4096
+        do {
+            try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: maxFrames)
+            try engine.start()
+        } catch {
+            return nil
+        }
+        defer { engine.stop() }
+
+        player.scheduleBuffer(buffer, at: nil, options: [])
+        player.play()
+
+        var renderedFrames = 0
+        var attempts = 0
+        let outputBuffer = AVAudioPCMBuffer(
+            pcmFormat: engine.manualRenderingFormat,
+            frameCapacity: engine.manualRenderingMaximumFrameCount
+        )!
+        guard let result = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: expectedFrameCount),
+              let destination = result.floatChannelData else { return nil }
+        let channels = Int(format.channelCount)
+        // Render directly into the exact timeline-sized result to bound peak
+        // memory even for long clips.
+        let maximumAttempts = Int(expectedFrameCount / maxFrames) + 64
+        renderLoop: while renderedFrames < Int(expectedFrameCount) && attempts < maximumAttempts {
+            attempts += 1
+            let status: AVAudioEngineManualRenderingStatus
+            do {
+                status = try engine.renderOffline(maxFrames, to: outputBuffer)
+            } catch {
+                return nil
+            }
+            switch status {
+            case .success:
+                if outputBuffer.frameLength > 0 {
+                    guard let source = outputBuffer.floatChannelData else { return nil }
+                    let count = min(Int(outputBuffer.frameLength), Int(expectedFrameCount) - renderedFrames)
+                    for channel in 0..<channels {
+                        destination[channel].advanced(by: renderedFrames).update(from: source[channel], count: count)
+                    }
+                    renderedFrames += count
+                }
+            case .insufficientDataFromInputNode:
+                // This terminal status may still carry final frames rendered
+                // from other active nodes; preserve those frames before leaving.
+                if outputBuffer.frameLength > 0 {
+                    guard let source = outputBuffer.floatChannelData else { return nil }
+                    let count = min(Int(outputBuffer.frameLength), Int(expectedFrameCount) - renderedFrames)
+                    for channel in 0..<channels {
+                        destination[channel].advanced(by: renderedFrames).update(from: source[channel], count: count)
+                    }
+                    renderedFrames += count
+                }
+                break renderLoop
+            case .cannotDoInCurrentContext:
+                continue
+            case .error:
+                return nil
+            @unknown default:
+                return nil
+            }
+        }
+
+        if renderedFrames < Int(expectedFrameCount) {
+            for channel in 0..<channels {
+                destination[channel].advanced(by: renderedFrames).initialize(repeating: 0, count: Int(expectedFrameCount) - renderedFrames)
+            }
+        }
+        result.frameLength = expectedFrameCount
+        return result
     }
 }
 

@@ -62,7 +62,7 @@ struct TimelineView: View {
             get: { editingClip.map { ClipEditingContext(clip: $0.0, track: $0.1) } },
             set: { newValue in editingClip = newValue.map { ($0.clip, $0.track) } }
         )) { context in
-            ClipEditorSheet(project: project, clip: context.clip, track: context.track)
+            ClipEditorSheet(project: project, clip: context.clip, track: context.track, timelineEngine: engine)
         }
     }
 
@@ -80,7 +80,10 @@ struct TimelineView: View {
 
             HStack(spacing: 4) {
                 Text("BPM").fixedSize()
-                TextField("BPM", value: $project.bpm, format: .number)
+                TextField("BPM", value: Binding(
+                    get: { project.bpm },
+                    set: { project.setBPM($0) }
+                ), format: .number)
                     .frame(width: 50)
                     .textFieldStyle(.roundedBorder)
             }
@@ -90,7 +93,7 @@ struct TimelineView: View {
             } label: {
                 Image(systemName: project.snapToGrid ? "square.grid.3x3.fill" : "square.grid.3x3")
             }
-            .help("グリッドにスナップ")
+            .help("拍グリッドにスナップ")
 
             Divider().frame(height: 16)
 

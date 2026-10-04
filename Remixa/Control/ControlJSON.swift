@@ -89,17 +89,27 @@ extension Dictionary where Key == String, Value == Any {
 
 extension Clip {
     func toJSON() -> [String: Any] {
-        [
+        var json: [String: Any] = [
             "id": id.uuidString,
             "name": name,
             "sourcePath": audioPath,
             "start": timelineStart,
             "sourceStart": sourceStart,
-            "duration": duration,
+            "duration": timelineDuration,
+            "timelineDuration": timelineDuration,
+            "sourceDuration": duration,
+            "tempoRate": tempoRate,
+            "syncToProject": syncToProject,
             "gain": gain,
             "fadeIn": fadeIn,
             "fadeOut": fadeOut
         ]
+        if let sourceBPM {
+            json["sourceBPM"] = sourceBPM
+        } else {
+            json["sourceBPM"] = NSNull()
+        }
+        return json
     }
 }
 
