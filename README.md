@@ -1,5 +1,7 @@
 # Remixa
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/uyuk216)
+
 Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swift 6 / SwiftUI で作られています。
 
 ## 概要
@@ -150,3 +152,7 @@ xcodebuild -project Remixa.xcodeproj -scheme Remixa -configuration Debug build
 ## ライセンス
 
 MIT License. 詳細は [LICENSE](./LICENSE) を参照してください。
+
+## 支援
+
+Remixa が役に立ったら [GitHub Sponsors](https://github.com/sponsors/uyuk216) で支援していただけると開発の励みになります。

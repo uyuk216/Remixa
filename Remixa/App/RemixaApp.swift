@@ -83,6 +83,9 @@ struct RemixaApp: App {
                         updaterController.checkForUpdates(nil)
                     }
                 }
+                Button("Remixaを支援する…") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/uyuk216")!)
+                }
             }
             CommandGroup(replacing: .undoRedo) {
                 Button("元に戻す") { project.undo() }
