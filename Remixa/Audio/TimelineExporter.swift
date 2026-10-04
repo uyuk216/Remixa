@@ -64,6 +64,7 @@ enum TimelineExporter {
         let pan: Double
         let audible: Bool
         let effects: EffectsRackSettings
+        let automation: [AutomationLane]
 
         init(
             name: String = "トラック",
@@ -71,7 +72,8 @@ enum TimelineExporter {
             volume: Double,
             pan: Double,
             audible: Bool,
-            effects: EffectsRackSettings
+            effects: EffectsRackSettings,
+            automation: [AutomationLane] = []
         ) {
             self.name = name
             self.clips = clips
@@ -79,6 +81,7 @@ enum TimelineExporter {
             self.pan = pan
             self.audible = audible
             self.effects = effects
+            self.automation = automation
         }
     }
 
@@ -97,6 +100,8 @@ enum TimelineExporter {
         let renderFormat = TimelineEngine.projectFormat
         let engine = AVAudioEngine()
         var playerNodes: [AVAudioPlayerNode] = []
+        var effectGraphs: [EffectsGraph] = []
+        var mixerNodes: [AVAudioMixerNode] = []
         var sourceFiles: [AVAudioFile] = []
         var metronomeNode: AVAudioPlayerNode?
         var metronomeBuffers: [AVAudioPCMBuffer] = []
@@ -114,6 +119,8 @@ enum TimelineExporter {
             mixer.pan = Float(track.pan)
             graph.apply(track.effects, tempoPercent: 100, pitchSemitones: 0)
             playerNodes.append(player)
+            effectGraphs.append(graph)
+            mixerNodes.append(mixer)
         }
         if options.metronomeEnabled, options.metronomeVolume > 0 {
             let player = AVAudioPlayerNode()
@@ -195,6 +202,15 @@ enum TimelineExporter {
         var quietTailFrames: Int64 = 0
 
         while renderedFrames < maximumFramesToRender {
+            let automationTime = Double(renderedFrames) / renderFormat.sampleRate
+            for (index, track) in tracks.enumerated() {
+                Self.applyAutomation(
+                    for: track,
+                    at: automationTime,
+                    mixer: mixerNodes[index],
+                    graph: effectGraphs[index]
+                )
+            }
             let remaining = AVAudioFrameCount(maximumFramesToRender - renderedFrames)
             let framesToRender = min(maxFrames, min(engine.manualRenderingMaximumFrameCount, remaining))
             let status = try engine.renderOffline(framesToRender, to: outputBuffer)
@@ -266,7 +282,8 @@ enum TimelineExporter {
                 volume: track.volume,
                 pan: track.pan,
                 audible: true,
-                effects: track.effects
+                effects: track.effects,
+                automation: track.automation
             )
             let filename = Self.uniqueStemURL(
                 directory: directory,
@@ -327,6 +344,25 @@ enum TimelineExporter {
             if !FileManager.default.fileExists(atPath: candidate.path) { return candidate }
             suffix += 1
         }
+    }
+
+    private static func applyAutomation(
+        for track: TrackExportInfo,
+        at time: Double,
+        mixer: AVAudioMixerNode,
+        graph: EffectsGraph
+    ) {
+        let volume = track.automation.first(where: { $0.parameter == .volume })?.value(at: time)
+        let pan = track.automation.first(where: { $0.parameter == .pan })?.value(at: time)
+        mixer.outputVolume = track.audible ? Float(volume ?? track.volume) : 0
+        mixer.pan = Float(pan ?? track.pan)
+        graph.applyAutomation(
+            settings: track.effects,
+            filterCutoff: track.automation.first(where: { $0.parameter == .filterCutoff })?.value(at: time),
+            reverbWet: track.automation.first(where: { $0.parameter == .reverbWet })?.value(at: time),
+            delayWet: track.automation.first(where: { $0.parameter == .delayWet })?.value(at: time),
+            distortionWet: track.automation.first(where: { $0.parameter == .distortionWet })?.value(at: time)
+        )
     }
 
     private static func scheduleMetronome(
@@ -418,7 +454,8 @@ enum TimelineExporter {
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: sourceFormat.sampleRate,
                 AVNumberOfChannelsKey: sourceFormat.channelCount,
-                AVEncoderBitRateKey: options.m4aQuality.rawValue
+                AVEncoderBitRateKey: options.m4aQuality.rawValue,
+                AVEncoderBitRateStrategyKey: AVAudioBitRateStrategy_Constant
             ]
             return try AVAudioFile(forWriting: destination, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
         }

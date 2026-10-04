@@ -53,6 +53,7 @@ remixa - Remixa.app 制御用コマンドラインツール / CLI for controllin
   remixa export ~/Desktop/mix.wav --wav float32
   remixa export-stems ~/Desktop/stems m4a
   remixa call track.update '{"trackId":"...","volume":0.8}'
+  remixa call automation.set '{"trackId":"...","parameter":"volume","points":[{"time":0,"value":1}]}'
 """
 
 func printErrorAndExit(_ message: String) -> Never {

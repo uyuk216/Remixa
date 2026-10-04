@@ -75,6 +75,7 @@ final class ControlMethods {
         case "track.remove": try trackRemove(params); return NSNull()
         case "track.update": try trackUpdate(params); return NSNull()
         case "track.setEffects": try trackSetEffects(params); return NSNull()
+        case "automation.set": try automationSet(params); return NSNull()
 
         case "clip.add": return try clipAdd(params)
         case "clip.update": try clipUpdate(params); return NSNull()
@@ -344,6 +345,27 @@ final class ControlMethods {
         timelineEngine?.syncMixState()
     }
 
+    private func automationSet(_ params: [String: Any]) throws {
+        guard let trackId = params["trackId"] as? String,
+              let rawParameter = params["parameter"] as? String,
+              let parameter = AutomationParameter(rawValue: rawParameter),
+              let rawPoints = params["points"] as? [[String: Any]] else {
+            throw RPCError.invalidParams("trackId、parameter、pointsが必要です")
+        }
+        let range = parameter.valueRange
+        let points = try rawPoints.map { point -> AutomationPoint in
+            guard let time = point.double("time"), time.isFinite, time >= 0,
+                  let value = point.double("value"), value.isFinite, range.contains(value) else {
+                throw RPCError.invalidParams("各ポイントのtimeは0以上、valueは\(range.lowerBound)〜\(range.upperBound)で指定してください")
+            }
+            return AutomationPoint(time: time, value: value)
+        }
+        let project = try requireProject()
+        let track = try track(withID: trackId)
+        project.setAutomation(points, for: parameter, on: track)
+        timelineEngine?.syncMixState()
+    }
+
     // MARK: - clip.*
 
     private func clipAdd(_ params: [String: Any]) throws -> Any {
@@ -381,9 +403,7 @@ final class ControlMethods {
             guard let projectKey = project.projectKey, let detectedKey = clip.detectedKey else {
                 throw RPCError.invalidParams("プロジェクトのキーと検出済みのクリップキーが必要です")
             }
-            var shift = (projectKey.tonic - detectedKey.tonic + 12) % 12
-            if shift > 6 { shift -= 12 }
-            pitchForUpdate = shift
+            pitchForUpdate = MusicalKey.transposition(from: detectedKey, to: projectKey)
         } else {
             pitchForUpdate = requestedPitch
         }
@@ -429,7 +449,13 @@ final class ControlMethods {
         }.value
         guard let key else { throw RPCError.appFailure("音源のキーを推定できませんでした") }
         project.setDetectedKey(key, for: clip.id)
-        return ["key": key.name, "tonic": key.tonic, "mode": key.mode.rawValue]
+        return [
+            "key": key.name,
+            "displayName": key.displayName,
+            "camelot": key.camelotNotation,
+            "tonic": key.tonic,
+            "mode": key.mode.rawValue
+        ]
     }
 
     private func clipSyncTempo(_ params: [String: Any]) throws {
@@ -620,7 +646,7 @@ final class ControlMethods {
             }
             infos.append(TimelineExporter.TrackExportInfo(
                 name: track.name, clips: clips, volume: track.volume, pan: track.pan,
-                audible: audible, effects: track.effects
+                audible: audible, effects: track.effects, automation: track.automation
             ))
         }
         let masterVolume = project.masterVolume
@@ -659,7 +685,8 @@ final class ControlMethods {
                 volume: track.volume,
                 pan: track.pan,
                 audible: true,
-                effects: track.effects
+                effects: track.effects,
+                automation: track.automation
             )
         }
         let directory = URL(fileURLWithPath: path, isDirectory: true)

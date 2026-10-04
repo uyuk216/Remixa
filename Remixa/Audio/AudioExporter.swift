@@ -97,7 +97,8 @@ enum AudioExporter {
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: sourceFormat.sampleRate,
                 AVNumberOfChannelsKey: sourceFormat.channelCount,
-                AVEncoderBitRateKey: 256000
+                AVEncoderBitRateKey: 256000,
+                AVEncoderBitRateStrategyKey: AVAudioBitRateStrategy_Constant
             ]
             return try AVAudioFile(forWriting: destination, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
         }

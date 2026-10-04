@@ -138,6 +138,7 @@ remixa state                           # プロジェクト全体の状態を JS
 remixa call track.update '{"trackId":"...","volume":0.8}'  # 任意の RPC を直接呼ぶ
 remixa call clip.update '{"clipId":"...","tempoRate":1.1,"sourceBPM":120,"syncToProject":true}'
 remixa call clip.syncTempo '{"clipId":"..."}'  # プロジェクト BPM に合わせて同期
+remixa call automation.set '{"trackId":"...","parameter":"volume","points":[{"time":0,"value":1},{"time":8,"value":0.6}]}'
 ```
 
 ### Claude Code から使う

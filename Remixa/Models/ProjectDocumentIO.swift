@@ -103,7 +103,8 @@ enum ProjectDocumentIO {
                 ProjectSnapshot.TrackSnapshot(
                     id: track.id, name: track.name, clips: updatedClips,
                     volume: track.volume, pan: track.pan, mute: track.mute, solo: track.solo,
-                    effects: EffectsRackSettingsCodable(settings: track.effects)
+                    effects: EffectsRackSettingsCodable(settings: track.effects),
+                    automation: track.automation
                 )
             )
         }
@@ -184,6 +185,7 @@ enum ProjectDocumentIO {
             let t = Track(id: ts.id, name: ts.name, clips: ts.clips)
             t.volume = ts.volume; t.pan = ts.pan; t.mute = ts.mute; t.solo = ts.solo
             t.effects = ts.effects.settings
+            t.automation = ts.automation
             return t
         }
         project.fileURL = url

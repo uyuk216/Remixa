@@ -46,8 +46,151 @@ struct MusicalKey: Codable, Equatable, Hashable, Sendable, Identifiable {
         return "\(note)\(mode == .major ? "メジャー" : "マイナー")"
     }
 
+    var camelotNotation: String {
+        let majorTonic = mode == .major ? tonic : tonic + 3
+        let number = [8, 3, 10, 5, 12, 7, 2, 9, 4, 11, 6, 1][((majorTonic % 12) + 12) % 12]
+        return "\(number)\(mode == .major ? "B" : "A")"
+    }
+
+    var displayName: String { "\(name) (\(camelotNotation))" }
+
+    static func transposition(from source: MusicalKey, to target: MusicalKey) -> Int {
+        let sourceRelativeMajor = ((source.tonic + (source.mode == .minor ? 3 : 0)) % 12 + 12) % 12
+        let targetRelativeMajor = ((target.tonic + (target.mode == .minor ? 3 : 0)) % 12 + 12) % 12
+        guard sourceRelativeMajor != targetRelativeMajor else { return 0 }
+        var semitones = ((target.tonic - source.tonic) % 12 + 12) % 12
+        if semitones > 6 { semitones -= 12 }
+        return semitones
+    }
+
     static let all: [MusicalKey] = (0..<12).flatMap { tonic in
         [MusicalKey(tonic: tonic, mode: .major), MusicalKey(tonic: tonic, mode: .minor)]
+    }
+}
+
+enum AutomationParameter: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
+    case volume
+    case pan
+    case filterCutoff
+    case reverbWet
+    case delayWet
+    case distortionWet
+
+    var id: String { rawValue }
+
+    var japaneseName: String {
+        switch self {
+        case .volume: "音量"
+        case .pan: "パン"
+        case .filterCutoff: "フィルターカットオフ"
+        case .reverbWet: "リバーブ Wet"
+        case .delayWet: "ディレイ Wet"
+        case .distortionWet: "ディストーション Wet"
+        }
+    }
+
+    var valueRange: ClosedRange<Double> {
+        switch self {
+        case .volume: 0...2
+        case .pan: -1...1
+        case .filterCutoff: 20...20_000
+        case .reverbWet, .delayWet, .distortionWet: 0...100
+        }
+    }
+
+    func displayValue(_ value: Double) -> String {
+        switch self {
+        case .volume: String(format: "%.2f", value)
+        case .pan: String(format: "%+.2f", value)
+        case .filterCutoff: "\(String(format: "%.0f", value)) Hz"
+        case .reverbWet, .delayWet, .distortionWet: "\(String(format: "%.0f", value))%"
+        }
+    }
+
+    func normalized(_ value: Double) -> Double {
+        if self == .filterCutoff {
+            let clamped = min(valueRange.upperBound, max(valueRange.lowerBound, value))
+            return log(clamped / valueRange.lowerBound) / log(valueRange.upperBound / valueRange.lowerBound)
+        }
+        return (value - valueRange.lowerBound) / (valueRange.upperBound - valueRange.lowerBound)
+    }
+
+    func value(normalized: Double) -> Double {
+        let fraction = min(1, max(0, normalized))
+        if self == .filterCutoff {
+            return valueRange.lowerBound * pow(valueRange.upperBound / valueRange.lowerBound, fraction)
+        }
+        return valueRange.lowerBound + fraction * (valueRange.upperBound - valueRange.lowerBound)
+    }
+}
+
+struct AutomationPoint: Codable, Equatable, Sendable, Identifiable {
+    var id: UUID
+    var time: Double
+    var value: Double
+
+    init(id: UUID = UUID(), time: Double, value: Double) {
+        self.id = id
+        self.time = max(0, time)
+        self.value = value
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, time, value }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        time = max(0, try container.decode(Double.self, forKey: .time))
+        value = try container.decode(Double.self, forKey: .value)
+    }
+}
+
+struct AutomationLane: Codable, Equatable, Sendable, Identifiable {
+    var parameter: AutomationParameter
+    var points: [AutomationPoint]
+
+    var id: AutomationParameter { parameter }
+
+    func normalized() -> AutomationLane {
+        let range = parameter.valueRange
+        let ordered = points.enumerated()
+            .filter { $0.element.time.isFinite && $0.element.time >= 0 && $0.element.value.isFinite }
+            .sorted { lhs, rhs in
+                lhs.element.time == rhs.element.time ? lhs.offset < rhs.offset : lhs.element.time < rhs.element.time
+            }
+        var result: [AutomationPoint] = []
+        for (_, point) in ordered {
+            let normalizedPoint = AutomationPoint(
+                id: point.id,
+                time: point.time,
+                value: min(range.upperBound, max(range.lowerBound, point.value))
+            )
+            if let last = result.last, abs(last.time - normalizedPoint.time) < 0.000_001 {
+                result[result.count - 1] = normalizedPoint
+            } else {
+                result.append(normalizedPoint)
+            }
+        }
+        return AutomationLane(parameter: parameter, points: result)
+    }
+
+    func value(at time: Double) -> Double? {
+        guard time.isFinite, let first = points.first, time >= first.time else { return nil }
+        guard let last = points.last, time < last.time else { return points.last?.value }
+        for index in 0..<(points.count - 1) {
+            let left = points[index]
+            let right = points[index + 1]
+            guard time <= right.time else { continue }
+            let span = right.time - left.time
+            guard span > 0 else { return right.value }
+            let fraction = (time - left.time) / span
+            return left.value + (right.value - left.value) * fraction
+        }
+        return last.value
+    }
+
+    func toJSON() -> [String: Any] {
+        ["parameter": parameter.rawValue, "points": points.map { ["time": $0.time, "value": $0.value] }]
     }
 }
 
@@ -164,6 +307,7 @@ final class Track: ObservableObject, Identifiable, Codable {
     @Published var mute: Bool = false
     @Published var solo: Bool = false
     @Published var effects = EffectsRackSettings()
+    @Published var automation: [AutomationLane] = []
 
     init(id: UUID = UUID(), name: String, clips: [Clip] = []) {
         self.id = id
@@ -174,7 +318,7 @@ final class Track: ObservableObject, Identifiable, Codable {
     // MARK: Codable (manual, because @Published properties aren't auto-Codable)
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, clips, volume, pan, mute, solo, effects
+        case id, name, clips, volume, pan, mute, solo, effects, automation
     }
 
     convenience init(from decoder: Decoder) throws {
@@ -188,6 +332,7 @@ final class Track: ObservableObject, Identifiable, Codable {
         mute = try c.decodeIfPresent(Bool.self, forKey: .mute) ?? false
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
         effects = try c.decodeIfPresent(EffectsRackSettingsCodable.self, forKey: .effects)?.settings ?? EffectsRackSettings()
+        automation = (try c.decodeIfPresent([AutomationLane].self, forKey: .automation) ?? []).map { $0.normalized() }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -200,6 +345,7 @@ final class Track: ObservableObject, Identifiable, Codable {
         try c.encode(mute, forKey: .mute)
         try c.encode(solo, forKey: .solo)
         try c.encode(EffectsRackSettingsCodable(settings: effects), forKey: .effects)
+        try c.encode(automation, forKey: .automation)
     }
 
     /// A deep value-copy, used for undo/redo snapshots.
@@ -210,7 +356,12 @@ final class Track: ObservableObject, Identifiable, Codable {
         t.mute = mute
         t.solo = solo
         t.effects = effects
+        t.automation = automation
         return t
+    }
+
+    func automationValue(for parameter: AutomationParameter, at time: Double) -> Double? {
+        automation.first(where: { $0.parameter == parameter })?.value(at: time)
     }
 }
 
@@ -325,6 +476,46 @@ struct ProjectSnapshot: Codable {
         var mute: Bool
         var solo: Bool
         var effects: EffectsRackSettingsCodable
+        var automation: [AutomationLane]
+
+        private enum CodingKeys: String, CodingKey {
+            case id, name, clips, volume, pan, mute, solo, effects, automation
+        }
+
+        init(
+            id: UUID,
+            name: String,
+            clips: [Clip],
+            volume: Double,
+            pan: Double,
+            mute: Bool,
+            solo: Bool,
+            effects: EffectsRackSettingsCodable,
+            automation: [AutomationLane] = []
+        ) {
+            self.id = id
+            self.name = name
+            self.clips = clips
+            self.volume = volume
+            self.pan = pan
+            self.mute = mute
+            self.solo = solo
+            self.effects = effects
+            self.automation = automation
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            name = try container.decode(String.self, forKey: .name)
+            clips = try container.decode([Clip].self, forKey: .clips)
+            volume = try container.decode(Double.self, forKey: .volume)
+            pan = try container.decode(Double.self, forKey: .pan)
+            mute = try container.decode(Bool.self, forKey: .mute)
+            solo = try container.decode(Bool.self, forKey: .solo)
+            effects = try container.decode(EffectsRackSettingsCodable.self, forKey: .effects)
+            automation = (try container.decodeIfPresent([AutomationLane].self, forKey: .automation) ?? []).map { $0.normalized() }
+        }
     }
 }
 
@@ -418,6 +609,11 @@ final class RemixaProject: ObservableObject {
         tracks.flatMap { $0.clips }.map(\.timelineEnd).max() ?? 0
     }
 
+    var timelineDisplayDuration: Double {
+        let automationEnd = tracks.flatMap(\.automation).flatMap(\.points).map(\.time).max() ?? 0
+        return max(projectDuration, automationEnd)
+    }
+
     var anySolo: Bool { tracks.contains { $0.solo } }
 
     init() {
@@ -434,7 +630,8 @@ final class RemixaProject: ObservableObject {
                 ProjectSnapshot.TrackSnapshot(
                     id: $0.id, name: $0.name, clips: $0.clips,
                     volume: $0.volume, pan: $0.pan, mute: $0.mute, solo: $0.solo,
-                    effects: EffectsRackSettingsCodable(settings: $0.effects)
+                    effects: EffectsRackSettingsCodable(settings: $0.effects),
+                    automation: $0.automation
                 )
             },
             markers: markers,
@@ -463,6 +660,7 @@ final class RemixaProject: ObservableObject {
             let t = Track(id: ts.id, name: ts.name, clips: ts.clips)
             t.volume = ts.volume; t.pan = ts.pan; t.mute = ts.mute; t.solo = ts.solo
             t.effects = ts.effects.settings
+            t.automation = ts.automation
             return t
         }
         mixStateRevision &+= 1
@@ -646,9 +844,7 @@ final class RemixaProject: ObservableObject {
               let detectedKey = track.clips[index].detectedKey else {
             throw NSError(domain: "Remixa", code: 54, userInfo: [NSLocalizedDescriptionKey: "プロジェクトのキーと検出済みのクリップキーが必要です"])
         }
-        var shift = (projectKey.tonic - detectedKey.tonic + 12) % 12
-        if shift > 6 { shift -= 12 }
-        setClipPitch(shift, clipID: clipID)
+        setClipPitch(MusicalKey.transposition(from: detectedKey, to: projectKey), clipID: clipID)
     }
 
     func setPreviewMoveDelta(_ delta: Double) {
@@ -819,6 +1015,22 @@ final class RemixaProject: ObservableObject {
         if let mute { track.mute = mute }
         if let solo { track.solo = solo }
         if let effects { track.effects = effects }
+        mixStateRevision &+= 1
+    }
+
+    func setAutomation(
+        _ points: [AutomationPoint],
+        for parameter: AutomationParameter,
+        on track: Track
+    ) {
+        guard tracks.contains(where: { $0.id == track.id }) else { return }
+        let newLane = AutomationLane(parameter: parameter, points: points).normalized()
+        let oldPoints = track.automation.first(where: { $0.parameter == parameter })?.points ?? []
+        guard oldPoints != newLane.points else { return }
+        registerEdit()
+        track.automation.removeAll { $0.parameter == parameter }
+        if !newLane.points.isEmpty { track.automation.append(newLane) }
+        track.automation.sort { $0.parameter.rawValue < $1.parameter.rawValue }
         mixStateRevision &+= 1
     }
 

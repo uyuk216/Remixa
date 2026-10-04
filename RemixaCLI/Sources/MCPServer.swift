@@ -153,6 +153,18 @@ enum MCPServer {
                 "effects": prop("object", "EffectsRackSettings の一部キー", "Partial EffectsRackSettings keys")
              ], required: ["trackId", "effects"])),
 
+        Tool(name: "automation_set", method: "automation.set",
+             descriptionJA: "トラックのオートメーションポイントを設定",
+             descriptionEN: "Set automation points for a track parameter",
+             schema: schema([
+                "trackId": prop("string", "トラック ID", "Track ID"),
+                "parameter": prop("string", "volume（0〜2）/ pan（-1〜1）/ filterCutoff（20〜20000 Hz）/ 各Wet（0〜100%）", "volume (0-2) / pan (-1 to 1) / filterCutoff (20-20000 Hz) / effect Wet (0-100%)", extra: ["enum": ["volume", "pan", "filterCutoff", "reverbWet", "delayWet", "distortionWet"]]),
+                "points": prop("array", "時間と値の配列。空配列で解除", "Array of time/value points; an empty array clears the lane", extra: ["items": schema([
+                    "time": prop("number", "時間（秒、0以上）", "Time in seconds (0 or greater)", extra: ["minimum": 0]),
+                    "value": prop("number", "パラメータ値", "Parameter value")
+                ], required: ["time", "value"])])
+             ], required: ["trackId", "parameter", "points"])),
+
         Tool(name: "clip_add", method: "clip.add",
              descriptionJA: "トラックにクリップ（音声）を追加",
              descriptionEN: "Add a clip (audio) to a track",

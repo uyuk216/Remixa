@@ -155,7 +155,7 @@ struct TimelineExportView: View {
             }
             infos.append(TimelineExporter.TrackExportInfo(
                 name: track.name, clips: clips, volume: track.volume, pan: track.pan,
-                audible: audible, effects: track.effects
+                audible: audible, effects: track.effects, automation: track.automation
             ))
         }
 

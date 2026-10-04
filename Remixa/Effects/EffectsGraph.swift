@@ -76,6 +76,27 @@ final class EffectsGraph {
         distortion.loadFactoryPreset(distortionPresets[dIndex])
         distortion.wetDryMix = Float(settings.distortion.wetDryMix)
     }
+
+    func applyAutomation(
+        settings: EffectsRackSettings,
+        filterCutoff: Double?,
+        reverbWet: Double?,
+        delayWet: Double?,
+        distortionWet: Double?
+    ) {
+        filter.bypass = filterCutoff == nil ? settings.filter.bypass : false
+        filter.bands[0].filterType = settings.filter.isHighPass ? .highPass : .lowPass
+        filter.bands[0].frequency = Float(filterCutoff ?? settings.filter.cutoffHz)
+
+        reverb.bypass = reverbWet == nil ? settings.reverb.bypass : false
+        if let reverbWet { reverb.wetDryMix = Float(reverbWet) }
+
+        delay.bypass = delayWet == nil ? settings.delay.bypass : false
+        if let delayWet { delay.wetDryMix = Float(delayWet) }
+
+        distortion.bypass = distortionWet == nil ? settings.distortion.bypass : false
+        if let distortionWet { distortion.wetDryMix = Float(distortionWet) }
+    }
 }
 
 extension AVAudioUnitReverbPreset: @retroactive CaseIterable {

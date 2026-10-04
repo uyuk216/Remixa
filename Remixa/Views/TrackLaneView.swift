@@ -10,6 +10,7 @@ struct TrackLaneView: View {
     let width: CGFloat
     let height: CGFloat
     let playhead: Double
+    let automationParameter: AutomationParameter?
     let onDoubleTapClip: (Clip) -> Void
     let onDropAudio: @MainActor @Sendable (URL, Double) -> Void
 
@@ -29,6 +30,18 @@ struct TrackLaneView: View {
                     onDoubleTap: { onDoubleTapClip(clip) }
                 )
                 .environmentObject(project)
+                .allowsHitTesting(automationParameter == nil)
+            }
+            if let automationParameter {
+                AutomationLaneView(
+                    track: track,
+                    parameter: automationParameter,
+                    pixelsPerSecond: pixelsPerSecond,
+                    width: width,
+                    height: height
+                )
+                .environmentObject(project)
+                .zIndex(1)
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
@@ -159,7 +172,7 @@ private struct ClipView: View {
         let rate = String(format: "%.2f×", clip.tempoRate)
         let bpm = clip.sourceBPM.map { String(format: "%.0f BPM", $0) } ?? "元BPM未設定"
         let pitch = clip.pitchSemitones == 0 ? "±0半音" : "\(clip.pitchSemitones > 0 ? "+" : "")\(clip.pitchSemitones)半音"
-        let key = clip.detectedKey.map { " · \($0.name)" } ?? ""
+        let key = clip.detectedKey.map { " · \($0.displayName)" } ?? ""
         return "\(rate) · \(bpm)\(clip.syncToProject ? " · 同期" : "") · \(pitch)\(key)"
     }
 

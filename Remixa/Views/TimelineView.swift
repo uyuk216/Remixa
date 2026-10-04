@@ -12,6 +12,8 @@ struct TimelineView: View {
     @State private var editingClip: (Clip, Track)?
     @State private var renamingMarker: ProjectMarker?
     @State private var markerName = ""
+    @State private var isAutomationMode = false
+    @State private var selectedAutomationParameter: AutomationParameter = .volume
     @StateObject private var horizontalScroller = TimelineHorizontalScroller()
 
     private let headerWidth: CGFloat = 190
@@ -22,7 +24,7 @@ struct TimelineView: View {
     var body: some View {
         GeometryReader { geometry in
             let viewportWidth = max(320, geometry.size.width - headerWidth)
-            let totalWidth = max(viewportWidth, CGFloat(project.projectDuration) * pixelsPerSecond + 24)
+            let totalWidth = max(viewportWidth, CGFloat(project.timelineDisplayDuration) * pixelsPerSecond + 24)
             VStack(spacing: 0) {
                 timelineToolbar(viewportWidth: viewportWidth)
                 Divider()
@@ -60,6 +62,7 @@ struct TimelineView: View {
                                         width: totalWidth,
                                         height: laneHeight,
                                         playhead: engine.currentTime,
+                                        automationParameter: isAutomationMode ? selectedAutomationParameter : nil,
                                         onDoubleTapClip: { clip in editingClip = (clip, track) },
                                         onDropAudio: { url, seconds in
                                             guard let destination = project.tracks.first(where: { $0.id == trackID }) else { return }
@@ -84,6 +87,7 @@ struct TimelineView: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { location in
+                            guard !isAutomationMode else { return }
                             let seconds = max(0, Double(location.x) / pixelsPerSecond)
                             engine.seek(to: seconds)
                         }
@@ -161,6 +165,19 @@ struct TimelineView: View {
             }
 
             Menu {
+                Toggle("レーンを表示・編集", isOn: $isAutomationMode)
+                Picker("表示するパラメータ", selection: $selectedAutomationParameter) {
+                    ForEach(AutomationParameter.allCases) { parameter in
+                        Text(parameter.japaneseName).tag(parameter)
+                    }
+                }
+            } label: {
+                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                    .foregroundStyle(isAutomationMode ? Color.accentColor : Color.primary)
+            }
+            .help("トラックのオートメーション")
+
+            Menu {
                 Picker("拍子", selection: Binding(
                     get: { project.timeSignature },
                     set: { project.setTimelineSettings(timeSignature: $0) }
@@ -236,7 +253,7 @@ struct TimelineView: View {
                         set: { project.setProjectKey($0) }
                     )) {
                         Text("未設定").tag(nil as MusicalKey?)
-                        ForEach(MusicalKey.all) { key in Text(key.name).tag(Optional(key)) }
+                        ForEach(MusicalKey.all) { key in Text(key.displayName).tag(Optional(key)) }
                     }
                     Button("このクリップのキーを検出") { detectKey(for: clip) }
                     Button("プロジェクトのキーに合わせる") {
@@ -253,7 +270,7 @@ struct TimelineView: View {
                         project.setClipPitch(clip.pitchSemitones + 1, clipID: clip.id)
                         engine.refreshPlaybackSchedule()
                     }
-                    Text("現在: \(clip.pitchSemitones) 半音 · キー: \(clip.detectedKey?.name ?? "未検出")")
+                    Text("現在: \(clip.pitchSemitones) 半音 · キー: \(clip.detectedKey?.displayName ?? "未検出")")
                 } label: {
                     Image(systemName: "music.note")
                 }
@@ -296,7 +313,7 @@ struct TimelineView: View {
     }
 
     private func fitAll(viewportWidth: CGFloat) {
-        let duration = max(1, project.projectDuration)
+        let duration = max(1, project.timelineDisplayDuration)
         pixelsPerSecond = Double(max(1, viewportWidth - 24)) / duration
     }
 
@@ -316,7 +333,7 @@ struct TimelineView: View {
 
     private func zoomLimits(viewportWidth: CGFloat) -> ClosedRange<Double> {
         let availableWidth = Double(max(1, viewportWidth - 24))
-        let projectSpan = max(1, project.projectDuration)
+        let projectSpan = max(1, project.timelineDisplayDuration)
         let allFit = availableWidth / projectSpan
         let selectedClips = project.tracks.flatMap { track in track.clips.filter { project.selectedClipIDs.contains($0.id) } }
         let selectedSpan: Double

@@ -80,6 +80,7 @@ final class TimelineEngine: ObservableObject {
             nodes.mixer.pan = Float(track.pan)
             nodes.graph.apply(track.effects, tempoPercent: 100, pitchSemitones: 0)
         }
+        applyAutomation(at: currentTime)
     }
 
     // MARK: - Transport
@@ -246,6 +247,7 @@ final class TimelineEngine: ObservableObject {
         guard let project, isPlaying else { return }
         let elapsed = ProcessInfo.processInfo.systemUptime - playbackAnchorWallTime
         currentTime = playbackAnchorPosition + max(0, elapsed)
+        applyAutomation(at: currentTime)
 
         if let loop = project.loopRegion, currentTime >= loop.upperBound {
             seek(to: loop.lowerBound)
@@ -255,6 +257,26 @@ final class TimelineEngine: ObservableObject {
         if duration > 0, currentTime >= duration, project.loopRegion == nil {
             currentTime = duration
             stop()
+        }
+    }
+
+    private func applyAutomation(at time: Double) {
+        guard let project else { return }
+        let anySolo = project.anySolo
+        for track in project.tracks {
+            guard let nodes = perTrack[track.id] else { continue }
+            let audible = track.solo || (!anySolo && !track.mute)
+            nodes.mixer.outputVolume = audible
+                ? Float(track.automationValue(for: .volume, at: time) ?? track.volume)
+                : 0
+            nodes.mixer.pan = Float(track.automationValue(for: .pan, at: time) ?? track.pan)
+            nodes.graph.applyAutomation(
+                settings: track.effects,
+                filterCutoff: track.automationValue(for: .filterCutoff, at: time),
+                reverbWet: track.automationValue(for: .reverbWet, at: time),
+                delayWet: track.automationValue(for: .delayWet, at: time),
+                distortionWet: track.automationValue(for: .distortionWet, at: time)
+            )
         }
     }
 

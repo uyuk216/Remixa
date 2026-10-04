@@ -111,7 +111,13 @@ extension Clip {
             json["sourceBPM"] = NSNull()
         }
         if let detectedKey {
-            json["detectedKey"] = ["tonic": detectedKey.tonic, "mode": detectedKey.mode.rawValue, "name": detectedKey.name]
+            json["detectedKey"] = [
+                "tonic": detectedKey.tonic,
+                "mode": detectedKey.mode.rawValue,
+                "name": detectedKey.name,
+                "displayName": detectedKey.displayName,
+                "camelot": detectedKey.camelotNotation
+            ]
         } else {
             json["detectedKey"] = NSNull()
         }
@@ -129,6 +135,7 @@ extension Track {
             "mute": mute,
             "solo": solo,
             "effects": EffectsJSON.toJSON(effects),
+            "automation": automation.map { $0.toJSON() },
             "clips": clips.map { $0.toJSON() }
         ]
     }
@@ -139,7 +146,13 @@ extension RemixaProject {
     func toJSON(timelineEngine: TimelineEngine?) -> [String: Any] {
         let projectKeyJSON: Any
         if let projectKey {
-            projectKeyJSON = ["tonic": projectKey.tonic, "mode": projectKey.mode.rawValue, "name": projectKey.name]
+            projectKeyJSON = [
+                "tonic": projectKey.tonic,
+                "mode": projectKey.mode.rawValue,
+                "name": projectKey.name,
+                "displayName": projectKey.displayName,
+                "camelot": projectKey.camelotNotation
+            ]
         } else {
             projectKeyJSON = NSNull()
         }
