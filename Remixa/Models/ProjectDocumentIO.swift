@@ -1,5 +1,4 @@
 import Foundation
-import AVFoundation
 import UniformTypeIdentifiers
 import AppKit
 
@@ -43,7 +42,6 @@ enum ProjectDocumentIO {
         var relativeNameForSource: [String: String] = [:]
         var usedNameKeys = Set<String>()
         var updatedClipsByTrackID: [UUID: [Clip]] = [:]
-        var sourcePathsByName: [String: String] = [:]
 
         func sourceURL(for clip: Clip) throws -> URL {
             let source: URL
@@ -85,7 +83,6 @@ enum ProjectDocumentIO {
             try FileManager.default.copyItem(at: source, to: stagingAudioDir.appendingPathComponent(candidate))
             relativeNameForSource[source.path] = candidate
             usedNameKeys.insert(collisionKey(for: candidate))
-            sourcePathsByName[candidate] = source.path
             return candidate
         }
 
@@ -144,12 +141,8 @@ enum ProjectDocumentIO {
         for track in project.tracks {
             track.clips = updatedClipsByTrackID[track.id] ?? track.clips
         }
-        for (name, sourcePath) in sourcePathsByName {
-            if let buffer = project.bufferCache[sourcePath] {
-                project.bufferCache[url.appendingPathComponent(audioDirName).appendingPathComponent(name).path] = buffer
-            }
-        }
         project.fileURL = url
+        project.invalidateAudioCaches()
         project.isDirty = false
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
     }

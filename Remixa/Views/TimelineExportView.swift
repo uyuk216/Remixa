@@ -57,14 +57,12 @@ struct TimelineExportView: View {
         var infos: [TimelineExporter.TrackExportInfo] = []
         let anySolo = project.anySolo
         for track in project.tracks {
-            var buffers: [String: AVAudioPCMBuffer] = [:]
-            for clip in track.clips {
-                guard buffers[clip.audioPath] == nil, let buffer = project.buffer(for: clip) else { continue }
-                buffers[clip.audioPath] = buffer
-            }
             let audible = track.solo || (!anySolo && !track.mute)
+            let clips = track.clips.map {
+                TimelineExporter.TrackExportInfo.SourceClip(clip: $0, sourceURL: project.sourceURL(for: $0))
+            }
             infos.append(TimelineExporter.TrackExportInfo(
-                clips: track.clips, buffers: buffers, volume: track.volume, pan: track.pan,
+                clips: clips, volume: track.volume, pan: track.pan,
                 audible: audible, effects: track.effects
             ))
         }

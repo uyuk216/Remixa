@@ -119,7 +119,8 @@ final class ControlServer: @unchecked Sendable {
             }
         }
         conn.onClose = { [weak self] in
-            self?.queue.async { self?.connections.removeValue(forKey: key) }
+            // ControlConnection invokes this callback on the server's serial queue.
+            self?.connections.removeValue(forKey: key)
         }
         connections[key] = conn
         conn.start()

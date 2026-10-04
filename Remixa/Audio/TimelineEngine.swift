@@ -18,10 +18,11 @@ final class TimelineEngine: ObservableObject {
     private var playbackAnchorWallTime: TimeInterval = 0
     private var playbackAnchorPosition: Double = 0
 
-    private struct TrackNodes {
+    private final class TrackNodes {
         let player = AVAudioPlayerNode()
         let graph = EffectsGraph()
         let mixer = AVAudioMixerNode()
+        var scheduledFiles: [AVAudioFile] = []
     }
 
     nonisolated static let projectFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
@@ -104,19 +105,52 @@ final class TimelineEngine: ObservableObject {
         for track in project.tracks {
             guard let nodes = perTrack[track.id] else { continue }
             nodes.player.stop()
+            nodes.scheduledFiles.removeAll(keepingCapacity: false)
             for clip in track.clips where clip.timelineEnd > startTime {
-                guard let sourceBuffer = project.buffer(for: clip) else { continue }
-                guard let processed = TimelineEngine.processedBuffer(for: clip, source: sourceBuffer) else {
+                let clipInnerOffset = max(0, startTime - clip.timelineStart)
+                let scheduleDelay = max(0, clip.timelineStart - startTime)
+                let atHost = startHost &+ AVAudioTime.hostTime(forSeconds: scheduleDelay)
+
+                if Self.canStreamDirectly(clip) {
+                    let sourceURL = project.sourceURL(for: clip)
+                    guard let file = try? AVAudioFile(forReading: sourceURL),
+                          file.processingFormat.sampleRate > 0 else {
+                        project.errorMessage = "クリップ「\(clip.name)」の音源を開けませんでした"
+                        continue
+                    }
+                    let sampleRate = file.processingFormat.sampleRate
+                    let fileDuration = Double(file.length) / sampleRate
+                    let sourceStart = min(fileDuration, max(0, clip.sourceStart))
+                    let sourceDuration = min(max(0, clip.duration), fileDuration - sourceStart)
+                    let elapsed = min(sourceDuration, clipInnerOffset)
+                    let startFrame = AVAudioFramePosition((sourceStart + elapsed) * sampleRate)
+                    let remaining = AVAudioFramePosition(((sourceDuration - elapsed) * sampleRate).rounded(.down))
+                    guard remaining > 0, remaining <= AVAudioFramePosition(UInt32.max) else { continue }
+                    nodes.player.scheduleSegment(
+                        file,
+                        startingFrame: startFrame,
+                        frameCount: AVAudioFrameCount(remaining),
+                        at: AVAudioTime(hostTime: atHost),
+                        completionHandler: nil
+                    )
+                    nodes.scheduledFiles.append(file)
+                    continue
+                }
+
+                guard let processed = project.processedBuffer(for: clip) else {
                     project.errorMessage = "クリップ「\(clip.name)」のテンポ変換に失敗しました"
                     continue
                 }
-                let clipInnerOffset = max(0, startTime - clip.timelineStart)
                 let framesPerSecond = processed.format.sampleRate
                 let sliceStart = AVAudioFramePosition(clipInnerOffset * framesPerSecond)
-                guard let slice = processed.slice(from: sliceStart, to: AVAudioFramePosition(processed.frameLength)) else { continue }
-                let scheduleDelay = max(0, clip.timelineStart - startTime)
-                let atHost = startHost &+ AVAudioTime.hostTime(forSeconds: scheduleDelay)
-                nodes.player.scheduleBuffer(slice, at: AVAudioTime(hostTime: atHost), options: [], completionHandler: nil)
+                let scheduledBuffer: AVAudioPCMBuffer
+                if sliceStart <= 0 {
+                    scheduledBuffer = processed
+                } else {
+                    guard let slice = processed.slice(from: sliceStart, to: AVAudioFramePosition(processed.frameLength)) else { continue }
+                    scheduledBuffer = slice
+                }
+                nodes.player.scheduleBuffer(scheduledBuffer, at: AVAudioTime(hostTime: atHost), options: [], completionHandler: nil)
             }
             nodes.player.play()
         }
@@ -135,7 +169,10 @@ final class TimelineEngine: ObservableObject {
     }
 
     func stop() {
-        for nodes in perTrack.values { nodes.player.stop() }
+        for nodes in perTrack.values {
+            nodes.player.stop()
+            nodes.scheduledFiles.removeAll(keepingCapacity: false)
+        }
         isPlaying = false
         currentTime = 0
         stopDisplayTimer()
@@ -143,7 +180,10 @@ final class TimelineEngine: ObservableObject {
 
     func seek(to seconds: Double) {
         let wasPlaying = isPlaying
-        for nodes in perTrack.values { nodes.player.stop() }
+        for nodes in perTrack.values {
+            nodes.player.stop()
+            nodes.scheduledFiles.removeAll(keepingCapacity: false)
+        }
         currentTime = max(0, seconds)
         if wasPlaying { _ = play() }
     }
@@ -187,16 +227,18 @@ final class TimelineEngine: ObservableObject {
         }
     }
 
-    /// Produces the fully-processed (trim + gain + fades baked in) buffer for a clip,
-    /// converting to the shared project format first if needed. Not cached across
-    /// calls; callers that need repeated access (e.g. waveform previews) should cache
-    /// per clip id + edit-version themselves.
-    nonisolated static func processedBuffer(for clip: Clip, source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        let converted = BufferFormatConverter.convert(source, to: projectFormat) ?? source
-        let sampleRate = converted.format.sampleRate
-        let startFrame = AVAudioFramePosition(clip.sourceStart * sampleRate)
-        let endFrame = min(AVAudioFramePosition(converted.frameLength), startFrame + AVAudioFramePosition(clip.duration * sampleRate))
-        guard let slice = converted.slice(from: startFrame, to: endFrame) else { return nil }
+    nonisolated static func canStreamDirectly(_ clip: Clip) -> Bool {
+        clip.tempoRate == 1.0 && clip.gain == 1.0 && clip.fadeIn <= 0 && clip.fadeOut <= 0
+    }
+
+    /// Processes only the source interval already read for this clip.
+    nonisolated static func processedBuffer(for clip: Clip, sourceRegion: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let converted = BufferFormatConverter.convert(sourceRegion, to: projectFormat) ?? sourceRegion
+        return processTrimmedBuffer(for: clip, slice: converted)
+    }
+
+    private nonisolated static func processTrimmedBuffer(for clip: Clip, slice: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let sampleRate = slice.format.sampleRate
         let rate = min(2.0, max(0.5, clip.tempoRate))
 
         if let data = slice.floatChannelData {

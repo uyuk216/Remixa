@@ -319,16 +319,19 @@ final class ControlMethods {
         let project = try requireProject()
         let (track, index) = try findClip(idString: clipId)
         let clip = track.clips[index]
-        guard let sourceBuffer = project.buffer(for: clip) else {
+        let sourceURL = project.sourceURL(for: clip)
+        guard let sourceDuration = try? AudioFileRegionReader.duration(of: sourceURL) else {
             throw RPCError.appFailure("音声の読み込みに失敗しました")
         }
 
-        let sampleRate = sourceBuffer.format.sampleRate
         let trimStart = params.number("trimStart") ?? 0
-        let trimEnd = params.number("trimEnd") ?? (Double(sourceBuffer.frameLength) / sampleRate)
-        let startFrame = AVAudioFramePosition(max(0, trimStart) * sampleRate)
-        let endFrame = AVAudioFramePosition(max(trimStart, trimEnd) * sampleRate)
-        guard let trimmed = sourceBuffer.slice(from: startFrame, to: endFrame), trimmed.frameLength > 0 else {
+        let trimEnd = params.number("trimEnd") ?? sourceDuration
+        let safeStart = max(0, trimStart)
+        let safeEnd = max(trimStart, trimEnd)
+        guard trimStart.isFinite, trimEnd.isFinite, safeEnd > safeStart,
+              let trimmed = try? AudioFileRegionReader.read(
+                url: sourceURL, sourceStart: safeStart, duration: safeEnd - safeStart
+              ) else {
             throw RPCError.invalidParams("trimStart/trimEndが不正です")
         }
 
@@ -448,14 +451,12 @@ final class ControlMethods {
         var infos: [TimelineExporter.TrackExportInfo] = []
         let anySolo = project.anySolo
         for track in project.tracks {
-            var buffers: [String: AVAudioPCMBuffer] = [:]
-            for clip in track.clips {
-                guard buffers[clip.audioPath] == nil, let buffer = project.buffer(for: clip) else { continue }
-                buffers[clip.audioPath] = buffer
-            }
             let audible = track.solo || (!anySolo && !track.mute)
+            let clips = track.clips.map {
+                TimelineExporter.TrackExportInfo.SourceClip(clip: $0, sourceURL: project.sourceURL(for: $0))
+            }
             infos.append(TimelineExporter.TrackExportInfo(
-                clips: track.clips, buffers: buffers, volume: track.volume, pan: track.pan,
+                clips: clips, volume: track.volume, pan: track.pan,
                 audible: audible, effects: track.effects
             ))
         }

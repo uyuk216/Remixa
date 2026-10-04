@@ -78,13 +78,13 @@ final class EffectsGraph {
     }
 }
 
-extension AVAudioUnitReverbPreset: CaseIterable {
+extension AVAudioUnitReverbPreset: @retroactive CaseIterable {
     public static var allCases: [AVAudioUnitReverbPreset] {
         [.smallRoom, .mediumRoom, .largeRoom, .mediumHall, .largeHall, .plate, .mediumChamber, .largeChamber, .cathedral, .largeRoom2, .mediumHall2, .mediumHall3, .largeHall2]
     }
 }
 
-extension AVAudioUnitDistortionPreset: CaseIterable {
+extension AVAudioUnitDistortionPreset: @retroactive CaseIterable {
     public static var allCases: [AVAudioUnitDistortionPreset] {
         [.drumsBitBrush, .drumsBufferBeats, .drumsLoFi, .multiBrokenSpeaker, .multiCellphoneConcert, .multiDecimated1, .multiDecimated2, .multiDecimated3, .multiDecimated4, .multiDistortedFunk, .multiDistortedCubed, .multiDistortedSquared, .multiEcho1, .multiEcho2, .multiEchoTight1, .multiEchoTight2, .multiEverythingIsBroken, .speechAlienChatter, .speechCosmicInterference, .speechGoldenPi, .speechRadioTower, .speechWaves]
     }

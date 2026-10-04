@@ -3,7 +3,7 @@ import AVFoundation
 import SwiftUI
 
 /// A single audio region placed on a track's timeline.
-struct Clip: Identifiable, Codable, Equatable {
+struct Clip: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var name: String
     /// Path to the source audio, relative to the project package's `Audio/` folder
@@ -223,14 +223,33 @@ final class RemixaProject: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var mixStateRevision = 0
 
-    /// Decoded audio buffers keyed by resolved absolute file path, shared across clips
-    /// that reference the same source file.
-    var bufferCache: [String: AVAudioPCMBuffer] = [:]
-
     /// Downsampled waveform peaks (over the whole source file) keyed by resolved
     /// absolute file path, shared across clips that reference the same source file.
     struct CachedWaveform { let peaks: [Float]; let sourceDuration: Double }
     private var waveformCache: [String: CachedWaveform] = [:]
+
+    private struct ProcessedBufferKey: Hashable {
+        let path: String
+        let fileSize: Int
+        let modificationTime: TimeInterval
+        let sourceStart: UInt64
+        let duration: UInt64
+        let tempoRate: UInt64
+        let gain: UInt64
+        let fadeIn: UInt64
+        let fadeOut: UInt64
+    }
+
+    private struct ProcessedBufferEntry {
+        let buffer: AVAudioPCMBuffer
+        let byteCount: Int
+        var lastAccess: UInt64
+    }
+
+    private var processedBufferCache: [ProcessedBufferKey: ProcessedBufferEntry] = [:]
+    private var processedBufferCacheBytes = 0
+    private var processedBufferCacheClock: UInt64 = 0
+    private let processedBufferCacheLimit = 192 * 1024 * 1024
 
     private var undoStack: [ProjectSnapshot] = []
     private var redoStack: [ProjectSnapshot] = []
@@ -361,8 +380,7 @@ final class RemixaProject: ObservableObject {
         fileURL = loaded.fileURL
         isDirty = false
         errorMessage = nil
-        bufferCache = loaded.bufferCache
-        waveformCache.removeAll()
+        invalidateAudioCaches()
         clearUndoHistory()
         mixStateRevision &+= 1
     }
@@ -421,8 +439,7 @@ final class RemixaProject: ObservableObject {
     func addTrack(named name: String = "新規トラック", audioURL: URL? = nil, at timelineStart: Double = 0) -> Track {
         pushUndo()
         let track = Track(name: name)
-        if let audioURL, let buffer = try? loadBuffer(for: audioURL) {
-            let duration = Double(buffer.frameLength) / buffer.format.sampleRate
+        if let audioURL, let duration = try? AudioFileRegionReader.duration(of: audioURL) {
             track.clips.append(Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration))
         }
         tracks.append(track)
@@ -465,12 +482,11 @@ final class RemixaProject: ObservableObject {
     // MARK: - Clip operations
 
     func addClip(to track: Track, audioURL: URL, atTimelineStart timelineStart: Double) {
-        guard let buffer = try? loadBuffer(for: audioURL) else {
+        guard let duration = try? AudioFileRegionReader.duration(of: audioURL) else {
             errorMessage = "読み込みに失敗しました: \(audioURL.lastPathComponent)"
             return
         }
         pushUndo()
-        let duration = Double(buffer.frameLength) / buffer.format.sampleRate
         let clip = Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration)
         track.clips.append(clip)
         objectWillChange.send()
@@ -492,8 +508,7 @@ final class RemixaProject: ObservableObject {
         guard timelineSeconds.isFinite,
               let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
         var updated = track.clips[index]
-        guard let source = buffer(for: updated) else { return }
-        let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+        guard let sourceDuration = sourceDuration(for: updated) else { return }
         let latestStart = max(0, sourceDuration - updated.duration)
         updated.sourceStart = min(latestStart, max(0, updated.sourceStart + timelineSeconds * updated.tempoRate))
         guard updated != track.clips[index] else { return }
@@ -509,8 +524,7 @@ final class RemixaProject: ObservableObject {
         pushUndo()
         var updated = track.clips[index]
         updated.timelineStart = max(0, newStart)
-        if let source = buffer(for: updated) {
-            let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+        if let sourceDuration = sourceDuration(for: updated) {
             let minimumDuration = min(0.02, sourceDuration)
             let latestStart = max(0, sourceDuration - minimumDuration)
             updated.sourceStart = min(max(0, newSourceStart), latestStart)
@@ -562,8 +576,8 @@ final class RemixaProject: ObservableObject {
             updated.syncToProject = false
         }
         if updated.syncToProject {
-            if updated.sourceBPM == nil, let source = buffer(for: updated) {
-                updated.sourceBPM = BPMEstimator.estimate(buffer: source)
+            if updated.sourceBPM == nil {
+                updated.sourceBPM = BPMEstimator.estimate(fileURL: sourceURL(for: updated))
             }
             if let sourceBPM = updated.sourceBPM,
                let rate = Self.tempoRate(projectBPM: bpm, sourceBPM: sourceBPM) {
@@ -576,8 +590,7 @@ final class RemixaProject: ObservableObject {
         }
         let requestedSourceDuration = duration.map { max(0.02, $0 * updated.tempoRate) }
         if sourceStart != nil || duration != nil {
-            if let source = buffer(for: updated) {
-                let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+            if let sourceDuration = sourceDuration(for: updated) {
                 let minimumDuration = min(0.02, sourceDuration)
                 let latestStart = max(0, sourceDuration - minimumDuration)
                 updated.sourceStart = min(max(0, sourceStart ?? updated.sourceStart), latestStart)
@@ -613,7 +626,7 @@ final class RemixaProject: ObservableObject {
             sourceBPM = overrideBPM
         } else if let existing = clip.sourceBPM {
             sourceBPM = existing
-        } else if let source = buffer(for: clip), let estimate = BPMEstimator.estimate(buffer: source) {
+        } else if let estimate = BPMEstimator.estimate(fileURL: sourceURL(for: clip)) {
             sourceBPM = estimate
         } else {
             throw NSError(domain: "Remixa", code: 51, userInfo: [NSLocalizedDescriptionKey: "元BPMを推定できませんでした。元BPMを入力してください"])
@@ -634,11 +647,21 @@ final class RemixaProject: ObservableObject {
 
     private static func tempoRate(projectBPM: Double, sourceBPM: Double) -> Double? {
         guard projectBPM.isFinite, projectBPM > 0, sourceBPM.isFinite, sourceBPM > 0 else { return nil }
-        var rate = projectBPM / sourceBPM
-        guard rate.isFinite, rate > 0 else { return nil }
-        while rate < 0.5 { rate *= 2 }
-        while rate > 2.0 { rate /= 2 }
-        return min(2.0, max(0.5, rate))
+        let rawRate = projectBPM / sourceBPM
+        guard rawRate.isFinite, rawRate > 0 else { return nil }
+        var candidates: [Double] = []
+        var candidate = rawRate
+        while candidate >= 0.5 {
+            if candidate <= 2.0 { candidates.append(candidate) }
+            candidate /= 2
+        }
+        candidate = rawRate * 2
+        while candidate.isFinite, candidate <= 2.0 {
+            if candidate >= 0.5 { candidates.append(candidate) }
+            candidate *= 2
+        }
+        guard let closest = candidates.min(by: { abs($0 - 1.0) < abs($1 - 1.0) }) else { return nil }
+        return min(2.0, max(0.5, closest))
     }
 
     func splitClip(_ clip: Clip, on track: Track, at playhead: Double) {
@@ -678,11 +701,27 @@ final class RemixaProject: ObservableObject {
     /// Replaces a clip's audio wholesale (used when the v0.1 clip editor commits an edit).
     func replaceClipAudio(_ clip: Clip, on track: Track, newBuffer: AVAudioPCMBuffer, cacheKey: String) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        let safeName = cacheKey.unicodeScalars.map {
+            CharacterSet.alphanumerics.contains($0) ? String($0) : "-"
+        }.joined()
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("remixa-\(safeName)-\(UUID().uuidString).caf")
+        do {
+            let audioFile = try AVAudioFile(
+                forWriting: sourceURL,
+                settings: newBuffer.format.settings,
+                commonFormat: newBuffer.format.commonFormat,
+                interleaved: newBuffer.format.isInterleaved
+            )
+            try audioFile.write(from: newBuffer)
+        } catch {
+            errorMessage = "編集した音声を保存できませんでした: \(error.localizedDescription)"
+            return
+        }
         cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
-        bufferCache[cacheKey] = newBuffer
         var updated = track.clips[index]
-        updated.audioPath = cacheKey
+        updated.audioPath = sourceURL.path
         updated.isRelative = false
         updated.sourceStart = 0
         updated.duration = Double(newBuffer.frameLength) / newBuffer.format.sampleRate
@@ -698,35 +737,76 @@ final class RemixaProject: ObservableObject {
 
     // MARK: - Audio loading
 
-    /// Loads (and caches) the PCM buffer for a clip's resolved source file.
-    func loadBuffer(for url: URL) throws -> AVAudioPCMBuffer {
-        let key = url.path
-        if let cached = bufferCache[key] { return cached }
-        let file = try AVAudioFile(forReading: url)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw NSError(domain: "Remixa", code: 10, userInfo: [NSLocalizedDescriptionKey: "バッファを確保できませんでした"])
-        }
-        try file.read(into: buffer)
-        bufferCache[key] = buffer
-        return buffer
+    func sourceURL(for clip: Clip) -> URL {
+        clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))
     }
 
-    func buffer(for clip: Clip) -> AVAudioPCMBuffer? {
-        let url = clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))
-        return try? loadBuffer(for: url)
+    func sourceDuration(for clip: Clip) -> Double? {
+        try? AudioFileRegionReader.duration(of: sourceURL(for: clip))
+    }
+
+    /// Returns a processed, clip-sized buffer using a bounded LRU cache. Source reads
+    /// are limited to the clip's trim region, so normal timeline playback does not
+    /// decode or retain the rest of a long source file.
+    func processedBuffer(for clip: Clip) -> AVAudioPCMBuffer? {
+        let url = sourceURL(for: clip)
+        let attributes = (try? FileManager.default.attributesOfItem(atPath: url.path)) ?? [:]
+        let key = ProcessedBufferKey(
+            path: url.path,
+            fileSize: (attributes[.size] as? NSNumber)?.intValue ?? 0,
+            modificationTime: (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0,
+            sourceStart: clip.sourceStart.bitPattern,
+            duration: clip.duration.bitPattern,
+            tempoRate: clip.tempoRate.bitPattern,
+            gain: clip.gain.bitPattern,
+            fadeIn: clip.fadeIn.bitPattern,
+            fadeOut: clip.fadeOut.bitPattern
+        )
+        if var entry = processedBufferCache[key] {
+            processedBufferCacheClock &+= 1
+            entry.lastAccess = processedBufferCacheClock
+            processedBufferCache[key] = entry
+            return entry.buffer
+        }
+
+        guard let sourceRegion = try? AudioFileRegionReader.read(
+            url: url, sourceStart: clip.sourceStart, duration: clip.duration
+        ), let processed = TimelineEngine.processedBuffer(for: clip, sourceRegion: sourceRegion) else {
+            return nil
+        }
+        let bytes = Int(min(
+            Int64(Int.max),
+            Int64(processed.frameLength) * Int64(processed.format.channelCount) * Int64(MemoryLayout<Float>.size)
+        ))
+        guard bytes <= processedBufferCacheLimit else { return processed }
+
+        while processedBufferCacheBytes + bytes > processedBufferCacheLimit,
+              let oldestKey = processedBufferCache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key,
+              let oldest = processedBufferCache.removeValue(forKey: oldestKey) {
+            processedBufferCacheBytes -= oldest.byteCount
+        }
+        processedBufferCacheClock &+= 1
+        processedBufferCache[key] = ProcessedBufferEntry(buffer: processed, byteCount: bytes, lastAccess: processedBufferCacheClock)
+        processedBufferCacheBytes += bytes
+        return processed
+    }
+
+    func invalidateAudioCaches() {
+        waveformCache.removeAll(keepingCapacity: false)
+        processedBufferCache.removeAll(keepingCapacity: false)
+        processedBufferCacheBytes = 0
+        processedBufferCacheClock = 0
     }
 
     /// Downsampled peaks for the clip's whole source file (not just the trimmed
     /// region), cached by resolved file path so multiple clips sharing a source
     /// (or repeated redraws of the same clip) don't re-decode/re-downsample.
     func waveform(for clip: Clip) -> CachedWaveform? {
-        let url = clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))
+        let url = sourceURL(for: clip)
         let key = url.path
         if let cached = waveformCache[key] { return cached }
-        guard let buffer = try? loadBuffer(for: url) else { return nil }
-        let duration = Double(buffer.frameLength) / buffer.format.sampleRate
-        let peaks = WaveformGenerator.peaks(from: buffer, targetCount: 800)
-        let result = CachedWaveform(peaks: peaks, sourceDuration: duration)
+        guard let waveform = try? WaveformGenerator.peaks(from: url, targetCount: 800) else { return nil }
+        let result = CachedWaveform(peaks: waveform.peaks, sourceDuration: waveform.duration)
         waveformCache[key] = result
         return result
     }
@@ -752,12 +832,14 @@ final class RemixaProject: ObservableObject {
         defer {
             activeStemRuns.removeValue(forKey: runID)
             if !keepOutput, let outputDirForCleanup {
-                bufferCache = bufferCache.filter { !$0.key.hasPrefix(outputDirForCleanup.path + "/") }
                 try? FileManager.default.removeItem(at: outputDirForCleanup)
             }
         }
 
-        guard let sourceBuffer = try? loadBuffer(for: clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))) else {
+        let sourceURL = sourceURL(for: clip)
+        guard let sourceBuffer = try? AudioFileRegionReader.read(
+            url: sourceURL, sourceStart: clip.sourceStart, duration: clip.duration
+        ) else {
             throw NSError(domain: "Remixa", code: 41, userInfo: [NSLocalizedDescriptionKey: "音声を読み込めませんでした"])
         }
 
@@ -766,7 +848,7 @@ final class RemixaProject: ObservableObject {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
         let regionURL = tmpDir.appendingPathComponent("region.wav")
-        try Self.writeRegion(of: sourceBuffer, sourceStart: clip.sourceStart, duration: clip.duration, to: regionURL)
+        try Self.writeRegion(of: sourceBuffer, sourceStart: 0, duration: clip.duration, to: regionURL)
 
         let outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Remixa", isDirectory: true)
@@ -792,8 +874,7 @@ final class RemixaProject: ObservableObject {
         var preparedTracks: [Track] = []
         var newTrackIDs: [UUID] = []
         for stem in stems {
-            guard let stemBuffer = try? loadBuffer(for: stem.url) else { continue }
-            let duration = Double(stemBuffer.frameLength) / stemBuffer.format.sampleRate
+            guard let duration = try? AudioFileRegionReader.duration(of: stem.url) else { continue }
             let newTrack = Track(name: Self.japaneseStemName(for: stem.name))
             let newClip = Clip(name: newTrack.name, audioURL: stem.url, timelineStart: clip.timelineStart, sourceStart: 0, duration: duration)
             newTrack.clips.append(newClip)
@@ -852,16 +933,6 @@ final class RemixaProject: ObservableObject {
         let endFrame = min(AVAudioFramePosition(buffer.frameLength), startFrame + AVAudioFramePosition(frameCount))
         let clampedCount = AVAudioFrameCount(max(0, endFrame - startFrame))
 
-        guard let region = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: max(clampedCount, 1)) else {
-            throw NSError(domain: "Remixa", code: 42, userInfo: [NSLocalizedDescriptionKey: "バッファを確保できませんでした"])
-        }
-        region.frameLength = clampedCount
-        if clampedCount > 0, let srcData = buffer.floatChannelData, let dstData = region.floatChannelData {
-            for ch in 0..<Int(format.channelCount) {
-                dstData[ch].update(from: srcData[ch] + Int(startFrame), count: Int(clampedCount))
-            }
-        }
-
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: format.sampleRate,
@@ -871,6 +942,19 @@ final class RemixaProject: ObservableObject {
             AVLinearPCMIsBigEndianKey: false
         ]
         let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        if startFrame == 0, clampedCount == buffer.frameLength {
+            try file.write(from: buffer)
+            return
+        }
+        guard let region = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: max(clampedCount, 1)) else {
+            throw NSError(domain: "Remixa", code: 42, userInfo: [NSLocalizedDescriptionKey: "バッファを確保できませんでした"])
+        }
+        region.frameLength = clampedCount
+        if clampedCount > 0, let srcData = buffer.floatChannelData, let dstData = region.floatChannelData {
+            for ch in 0..<Int(format.channelCount) {
+                dstData[ch].update(from: srcData[ch] + Int(startFrame), count: Int(clampedCount))
+            }
+        }
         try file.write(from: region)
     }
 
@@ -883,8 +967,7 @@ final class RemixaProject: ObservableObject {
         selectedClipID = nil
         fileURL = nil
         isDirty = false
-        bufferCache.removeAll()
-        waveformCache.removeAll()
+        invalidateAudioCaches()
         errorMessage = nil
         clearUndoHistory()
     }

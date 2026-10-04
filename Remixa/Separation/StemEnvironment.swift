@@ -290,7 +290,7 @@ final class StemEnvironment: ObservableObject {
 
             final class DataBox: @unchecked Sendable { var data = Data() }
             let collected = DataBox()
-            pipe.fileHandleForReading.readabilityHandler = { handle in
+            pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
                 let chunk = handle.availableData
                 guard !chunk.isEmpty else { return }
                 collected.data.append(chunk)

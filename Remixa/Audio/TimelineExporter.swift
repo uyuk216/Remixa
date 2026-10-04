@@ -4,9 +4,13 @@ import AVFoundation
 /// per-track effects) to a single interleaved file, mirroring `TimelineEngine`'s graph
 /// so exported audio matches what's heard during live playback.
 enum TimelineExporter {
-    struct TrackExportInfo: @unchecked Sendable {
-        let clips: [Clip]
-        let buffers: [String: AVAudioPCMBuffer] // keyed by clip.audioPath
+    struct TrackExportInfo: Sendable {
+        struct SourceClip: Sendable {
+            let clip: Clip
+            let sourceURL: URL
+        }
+
+        let clips: [SourceClip]
         let volume: Double
         let pan: Double
         let audible: Bool
@@ -27,6 +31,7 @@ enum TimelineExporter {
         let renderFormat = TimelineEngine.projectFormat
         let engine = AVAudioEngine()
         var playerNodes: [AVAudioPlayerNode] = []
+        var sourceFiles: [AVAudioFile] = []
 
         for track in tracks {
             let player = AVAudioPlayerNode()
@@ -52,9 +57,37 @@ enum TimelineExporter {
         for (index, track) in tracks.enumerated() {
             let player = playerNodes[index]
             player.play()
-            for clip in track.clips {
-                guard let source = track.buffers[clip.audioPath] else { continue }
-                guard let processed = TimelineEngine.processedBuffer(for: clip, source: source) else {
+            for sourceClip in track.clips {
+                let clip = sourceClip.clip
+                if TimelineEngine.canStreamDirectly(clip) {
+                    let sourceFile = try AVAudioFile(forReading: sourceClip.sourceURL)
+                    let sampleRate = sourceFile.processingFormat.sampleRate
+                    let fileDuration = Double(sourceFile.length) / sampleRate
+                    let sourceStart = min(fileDuration, max(0, clip.sourceStart))
+                    let sourceDuration = min(max(0, clip.duration), fileDuration - sourceStart)
+                    let frameCount = AVAudioFramePosition((sourceDuration * sampleRate).rounded(.down))
+                    guard frameCount > 0, frameCount <= AVAudioFramePosition(UInt32.max) else {
+                        throw NSError(domain: "Remixa", code: 31, userInfo: [
+                            NSLocalizedDescriptionKey: "クリップ「\(clip.name)」の音声区間を読み込めませんでした"
+                        ])
+                    }
+                    let startFrame = AVAudioFramePosition(sourceStart * sampleRate)
+                    let sampleTime = AVAudioFramePosition(clip.timelineStart * renderFormat.sampleRate)
+                    let atTime = AVAudioTime(sampleTime: sampleTime, atRate: renderFormat.sampleRate)
+                    player.scheduleSegment(
+                        sourceFile,
+                        startingFrame: startFrame,
+                        frameCount: AVAudioFrameCount(frameCount),
+                        at: atTime,
+                        completionHandler: nil
+                    )
+                    sourceFiles.append(sourceFile)
+                    continue
+                }
+                let sourceRegion = try AudioFileRegionReader.read(
+                    url: sourceClip.sourceURL, sourceStart: clip.sourceStart, duration: clip.duration
+                )
+                guard let processed = TimelineEngine.processedBuffer(for: clip, sourceRegion: sourceRegion) else {
                     throw NSError(domain: "Remixa", code: 31, userInfo: [
                         NSLocalizedDescriptionKey: "クリップ「\(clip.name)」のテンポ変換に失敗しました"
                     ])
@@ -117,6 +150,7 @@ enum TimelineExporter {
             if shouldStopRendering || renderedFrames >= maximumFramesToRender { break }
         }
         progress(1.0)
+        withExtendedLifetime(sourceFiles) {}
     }
 
     private static func rms(of buffer: AVAudioPCMBuffer) -> Float {
