@@ -57,7 +57,7 @@ enum ProjectDocumentIO {
                 source = URL(fileURLWithPath: clip.audioPath)
             }
             let normalized = source.standardizedFileURL
-            guard fm.fileExists(atPath: normalized.path) else {
+            guard FileManager.default.fileExists(atPath: normalized.path) else {
                 throw NSError(domain: "Remixa", code: 22, userInfo: [NSLocalizedDescriptionKey: "音声ファイルが見つかりません: \(source.lastPathComponent)"])
             }
             return normalized
@@ -76,13 +76,13 @@ enum ProjectDocumentIO {
             let fileExtension = source.pathExtension
             var candidate = originalName
             var suffix = 1
-            while usedNameKeys.contains(collisionKey(for: candidate)) || fm.fileExists(atPath: stagingAudioDir.appendingPathComponent(candidate).path) {
+            while usedNameKeys.contains(collisionKey(for: candidate)) || FileManager.default.fileExists(atPath: stagingAudioDir.appendingPathComponent(candidate).path) {
                 let stemWithSuffix = "\(sourceStem)_\(suffix)"
                 candidate = fileExtension.isEmpty ? stemWithSuffix : "\(stemWithSuffix).\(fileExtension)"
                 suffix += 1
             }
 
-            try fm.copyItem(at: source, to: stagingAudioDir.appendingPathComponent(candidate))
+            try FileManager.default.copyItem(at: source, to: stagingAudioDir.appendingPathComponent(candidate))
             relativeNameForSource[source.path] = candidate
             usedNameKeys.insert(collisionKey(for: candidate))
             sourcePathsByName[candidate] = source.path
