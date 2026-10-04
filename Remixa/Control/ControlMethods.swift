@@ -441,14 +441,20 @@ final class ControlMethods {
         let project = try requireProject()
         let (track, index) = try findClip(idString: clipId)
         let clip = track.clips[index]
-        let url = project.sourceURL(for: clip)
-        let sourceStart = clip.sourceStart
-        let duration = clip.duration
+        guard let snapshot = project.keyDetectionSnapshot(for: clip.id) else {
+            throw RPCError.appFailure("キー検出対象のクリップが見つかりません")
+        }
         let key = await Task.detached(priority: .userInitiated) {
-            KeyDetector.estimate(fileURL: url, sourceStart: sourceStart, duration: duration)
+            KeyDetector.estimate(
+                fileURL: snapshot.sourceURL,
+                sourceStart: Double(bitPattern: snapshot.sourceStartBits),
+                duration: Double(bitPattern: snapshot.durationBits)
+            )
         }.value
         guard let key else { throw RPCError.appFailure("音源のキーを推定できませんでした") }
-        project.setDetectedKey(key, for: clip.id)
+        guard project.setDetectedKey(key, matching: snapshot) else {
+            throw RPCError.appFailure("解析中に音源またはトリム範囲が変更されたため、結果を破棄しました")
+        }
         return [
             "key": key.name,
             "displayName": key.displayName,

@@ -64,9 +64,15 @@ struct TimelineView: View {
                                         playhead: engine.currentTime,
                                         automationParameter: isAutomationMode ? selectedAutomationParameter : nil,
                                         onDoubleTapClip: { clip in editingClip = (clip, track) },
-                                        onDropAudio: { url, seconds in
-                                            guard let destination = project.tracks.first(where: { $0.id == trackID }) else { return }
-                                            project.addClip(to: destination, audioURL: url, atTimelineStart: seconds)
+                                        onDropAudio: { url, seconds, isFirst in
+                                            guard let destination = project.tracks.first(where: { $0.id == trackID }),
+                                                  let clip = project.addClip(
+                                                    to: destination,
+                                                    audioURL: url,
+                                                    atTimelineStart: seconds,
+                                                    snapping: isFirst
+                                                  ) else { return nil }
+                                            return clip.timelineEnd
                                         }
                                     )
                                     .frame(height: laneHeight)
@@ -162,6 +168,7 @@ struct TimelineView: View {
                 ), format: .number)
                     .frame(width: 50)
                     .textFieldStyle(.roundedBorder)
+                    .help("設定範囲: 20〜400 BPM")
             }
 
             Menu {
@@ -348,16 +355,19 @@ struct TimelineView: View {
     }
 
     private func detectKey(for clip: Clip) {
-        let url = project.sourceURL(for: clip)
-        let sourceStart = clip.sourceStart
-        let duration = clip.duration
-        let clipID = clip.id
+        guard let snapshot = project.keyDetectionSnapshot(for: clip.id) else { return }
         Task { @MainActor in
             let result = await Task.detached(priority: .userInitiated) {
-                KeyDetector.estimate(fileURL: url, sourceStart: sourceStart, duration: duration)
+                KeyDetector.estimate(
+                    fileURL: snapshot.sourceURL,
+                    sourceStart: Double(bitPattern: snapshot.sourceStartBits),
+                    duration: Double(bitPattern: snapshot.durationBits)
+                )
             }.value
             if let result {
-                project.setDetectedKey(result, for: clipID)
+                if !project.setDetectedKey(result, matching: snapshot) {
+                    project.errorMessage = "解析中に音源またはトリム範囲が変更されたため、結果を破棄しました"
+                }
             } else {
                 project.errorMessage = "クリップのキーを推定できませんでした"
             }

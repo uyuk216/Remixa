@@ -12,7 +12,7 @@ struct TrackLaneView: View {
     let playhead: Double
     let automationParameter: AutomationParameter?
     let onDoubleTapClip: (Clip) -> Void
-    let onDropAudio: @MainActor @Sendable (URL, Double) -> Void
+    let onDropAudio: @MainActor @Sendable (URL, Double, Bool) -> Double?
 
     @State private var isDropTargeted = false
 
@@ -50,19 +50,51 @@ struct TrackLaneView: View {
         }
     }
 
+    @MainActor
     private func handleDrop(providers: [NSItemProvider], at location: CGPoint) -> Bool {
         guard !providers.isEmpty else { return false }
         let timelineStart = max(0, Double(location.x) / pixelsPerSecond)
-        let dropHandler = onDropAudio
-        for provider in providers {
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in
-                    dropHandler(url, timelineStart)
+        AudioDropSequence(providers: providers, timelineStart: timelineStart, onDropAudio: onDropAudio).start()
+        return true
+    }
+}
+
+@MainActor
+private final class AudioDropSequence {
+    private let providers: [NSItemProvider]
+    private let onDropAudio: @MainActor @Sendable (URL, Double, Bool) -> Double?
+    private var timelineStart: Double
+    private var nextProviderIndex = 0
+    private var didPlaceClip = false
+
+    init(
+        providers: [NSItemProvider],
+        timelineStart: Double,
+        onDropAudio: @escaping @MainActor @Sendable (URL, Double, Bool) -> Double?
+    ) {
+        self.providers = providers
+        self.timelineStart = timelineStart
+        self.onDropAudio = onDropAudio
+    }
+
+    func start() {
+        loadNextProvider()
+    }
+
+    private func loadNextProvider() {
+        guard nextProviderIndex < providers.count else { return }
+        let provider = providers[nextProviderIndex]
+        nextProviderIndex += 1
+        _ = provider.loadObject(ofClass: URL.self) { [self] url, _ in
+            Task { @MainActor [self] in
+                if let url,
+                   let nextStart = onDropAudio(url, timelineStart, !didPlaceClip) {
+                    timelineStart = nextStart
+                    didPlaceClip = true
                 }
+                loadNextProvider()
             }
         }
-        return true
     }
 }
 

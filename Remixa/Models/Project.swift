@@ -2,6 +2,26 @@ import Foundation
 import AVFoundation
 import SwiftUI
 
+enum ProjectTempoLimits {
+    static let minimumBPM = 20.0
+    static let maximumBPM = 400.0
+
+    static func clamped(_ bpm: Double) -> Double {
+        guard bpm.isFinite else { return 120 }
+        return min(maximumBPM, max(minimumBPM, bpm))
+    }
+}
+
+struct ClipKeyDetectionSnapshot: Sendable, Equatable {
+    let projectSessionID: UUID
+    let clipID: UUID
+    let sourceURL: URL
+    let sourceStartBits: UInt64
+    let durationBits: UInt64
+    let sourceFileSize: Int64?
+    let sourceModificationTime: TimeInterval?
+}
+
 enum SnapDivision: String, Codable, CaseIterable, Sendable, Identifiable {
     case quarterBeat
     case halfBeat
@@ -439,7 +459,7 @@ struct ProjectSnapshot: Codable {
         countInEnabled: Bool = false,
         projectKey: MusicalKey? = nil
     ) {
-        self.bpm = bpm
+        self.bpm = ProjectTempoLimits.clamped(bpm)
         self.masterVolume = masterVolume
         self.tracks = tracks
         self.markers = markers
@@ -454,7 +474,7 @@ struct ProjectSnapshot: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        bpm = try c.decode(Double.self, forKey: .bpm)
+        bpm = ProjectTempoLimits.clamped(try c.decode(Double.self, forKey: .bpm))
         masterVolume = try c.decode(Double.self, forKey: .masterVolume)
         tracks = try c.decode([TrackSnapshot].self, forKey: .tracks)
         markers = try c.decodeIfPresent([ProjectMarker].self, forKey: .markers) ?? []
@@ -548,30 +568,6 @@ final class RemixaProject: ObservableObject {
     struct CachedWaveform { let peaks: [Float]; let sourceDuration: Double }
     private var waveformCache: [String: CachedWaveform] = [:]
 
-    private struct ProcessedBufferKey: Hashable {
-        let path: String
-        let fileSize: Int
-        let modificationTime: TimeInterval
-        let sourceStart: UInt64
-        let duration: UInt64
-        let tempoRate: UInt64
-        let pitchSemitones: Int
-        let gain: UInt64
-        let fadeIn: UInt64
-        let fadeOut: UInt64
-    }
-
-    private struct ProcessedBufferEntry {
-        let buffer: AVAudioPCMBuffer
-        let byteCount: Int
-        var lastAccess: UInt64
-    }
-
-    private var processedBufferCache: [ProcessedBufferKey: ProcessedBufferEntry] = [:]
-    private var processedBufferCacheBytes = 0
-    private var processedBufferCacheClock: UInt64 = 0
-    private let processedBufferCacheLimit = 192 * 1024 * 1024
-
     private var undoStack: [ProjectSnapshot] = []
     private var redoStack: [ProjectSnapshot] = []
     private var coalescedUndoSnapshot: ProjectSnapshot?
@@ -646,7 +642,7 @@ final class RemixaProject: ObservableObject {
     }
 
     private func restore(_ snap: ProjectSnapshot) {
-        bpm = snap.bpm
+        bpm = ProjectTempoLimits.clamped(snap.bpm)
         masterVolume = snap.masterVolume
         markers = snap.markers
         snapDivision = snap.snapDivision
@@ -730,8 +726,14 @@ final class RemixaProject: ObservableObject {
     }
 
     func selectClip(_ clipID: UUID, command: Bool = false, shift: Bool = false) {
-        if shift, let anchor = selectionAnchorClipID,
-           let track = tracks.first(where: { $0.clips.contains(where: { $0.id == clipID }) }) {
+        if shift {
+            guard let anchor = selectionAnchorClipID,
+                  selectedClipIDs.contains(anchor),
+                  let track = tracks.first(where: { $0.clips.contains(where: { $0.id == clipID }) }) else {
+                selectedClipIDs = [clipID]
+                selectionAnchorClipID = clipID
+                return
+            }
             let orderedClips = track.clips.sorted(by: {
                 $0.timelineStart == $1.timelineStart
                     ? $0.id.uuidString < $1.id.uuidString
@@ -749,6 +751,9 @@ final class RemixaProject: ObservableObject {
         } else if command {
             if selectedClipIDs.contains(clipID) {
                 selectedClipIDs.remove(clipID)
+                if selectionAnchorClipID == clipID {
+                    selectionAnchorClipID = selectedClipIDs.sorted { $0.uuidString < $1.uuidString }.first
+                }
             } else {
                 selectedClipIDs.insert(clipID)
                 selectionAnchorClipID = clipID
@@ -818,13 +823,39 @@ final class RemixaProject: ObservableObject {
         projectKey = key
     }
 
-    func setDetectedKey(_ key: MusicalKey, for clipID: UUID) {
-        guard let (track, clip) = findClip(clipID),
-              let index = track.clips.firstIndex(where: { $0.id == clipID }),
-              clip.detectedKey != key else { return }
+    func keyDetectionSnapshot(for clipID: UUID) -> ClipKeyDetectionSnapshot? {
+        guard let clip = findClip(clipID)?.1 else { return nil }
+        let url = sourceURL(for: clip)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return ClipKeyDetectionSnapshot(
+            projectSessionID: projectSessionID,
+            clipID: clipID,
+            sourceURL: url,
+            sourceStartBits: clip.sourceStart.bitPattern,
+            durationBits: clip.duration.bitPattern,
+            sourceFileSize: (attributes?[.size] as? NSNumber)?.int64Value,
+            sourceModificationTime: (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970
+        )
+    }
+
+    @discardableResult
+    func setDetectedKey(_ key: MusicalKey, matching snapshot: ClipKeyDetectionSnapshot) -> Bool {
+        guard snapshot.projectSessionID == projectSessionID,
+              let (track, clip) = findClip(snapshot.clipID),
+              sourceURL(for: clip) == snapshot.sourceURL,
+              clip.sourceStart.bitPattern == snapshot.sourceStartBits,
+              clip.duration.bitPattern == snapshot.durationBits,
+              let index = track.clips.firstIndex(where: { $0.id == snapshot.clipID }) else { return false }
+        let attributes = try? FileManager.default.attributesOfItem(atPath: snapshot.sourceURL.path)
+        let currentSize = (attributes?[.size] as? NSNumber)?.int64Value
+        let currentModificationTime = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970
+        guard currentSize == snapshot.sourceFileSize,
+              currentModificationTime == snapshot.sourceModificationTime else { return false }
+        guard clip.detectedKey != key else { return true }
         registerEdit()
         track.clips[index].detectedKey = key
         objectWillChange.send()
+        return true
     }
 
     func setClipPitch(_ semitones: Int, clipID: UUID) {
@@ -950,7 +981,7 @@ final class RemixaProject: ObservableObject {
     func replaceContents(with loaded: RemixaProject) {
         cancelAllActiveStemSeparations()
         tracks = loaded.tracks
-        bpm = loaded.bpm
+        bpm = ProjectTempoLimits.clamped(loaded.bpm)
         masterVolume = loaded.masterVolume
         markers = loaded.markers
         snapDivision = loaded.snapDivision
@@ -978,13 +1009,14 @@ final class RemixaProject: ObservableObject {
     }
 
     func setBPM(_ value: Double) {
-        guard value.isFinite, value > 0, value != bpm else { return }
+        let clampedBPM = ProjectTempoLimits.clamped(value)
+        guard clampedBPM != bpm else { return }
         pushUndo()
-        bpm = value
+        bpm = clampedBPM
         for track in tracks {
             for index in track.clips.indices where track.clips[index].syncToProject {
                 guard let sourceBPM = track.clips[index].sourceBPM,
-                      let rate = Self.tempoRate(projectBPM: value, sourceBPM: sourceBPM) else { continue }
+                      let rate = Self.tempoRate(projectBPM: clampedBPM, sourceBPM: sourceBPM) else { continue }
                 track.clips[index].tempoRate = rate
             }
         }
@@ -1082,15 +1114,23 @@ final class RemixaProject: ObservableObject {
 
     // MARK: - Clip operations
 
-    func addClip(to track: Track, audioURL: URL, atTimelineStart timelineStart: Double) {
+    @discardableResult
+    func addClip(
+        to track: Track,
+        audioURL: URL,
+        atTimelineStart timelineStart: Double,
+        snapping: Bool = true
+    ) -> Clip? {
         guard let duration = try? AudioFileRegionReader.duration(of: audioURL) else {
             errorMessage = "読み込みに失敗しました: \(audioURL.lastPathComponent)"
-            return
+            return nil
         }
         pushUndo()
-        let clip = Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration)
+        let start = max(0, snapping ? snapped(timelineStart) : timelineStart)
+        let clip = Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: start, sourceStart: 0, duration: duration)
         track.clips.append(clip)
         objectWillChange.send()
+        return clip
     }
 
     func moveClip(_ clip: Clip, on track: Track, toTimelineStart newStart: Double, recordUndo: Bool = true) {
@@ -1356,58 +1396,8 @@ final class RemixaProject: ObservableObject {
         try? AudioFileRegionReader.duration(of: sourceURL(for: clip))
     }
 
-    /// Returns a processed, clip-sized buffer using a bounded LRU cache. Source reads
-    /// are limited to the clip's trim region, so normal timeline playback does not
-    /// decode or retain the rest of a long source file.
-    func processedBuffer(for clip: Clip) -> AVAudioPCMBuffer? {
-        let url = sourceURL(for: clip)
-        let attributes = (try? FileManager.default.attributesOfItem(atPath: url.path)) ?? [:]
-        let key = ProcessedBufferKey(
-            path: url.path,
-            fileSize: (attributes[.size] as? NSNumber)?.intValue ?? 0,
-            modificationTime: (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0,
-            sourceStart: clip.sourceStart.bitPattern,
-            duration: clip.duration.bitPattern,
-            tempoRate: clip.tempoRate.bitPattern,
-            pitchSemitones: clip.pitchSemitones,
-            gain: clip.gain.bitPattern,
-            fadeIn: clip.fadeIn.bitPattern,
-            fadeOut: clip.fadeOut.bitPattern
-        )
-        if var entry = processedBufferCache[key] {
-            processedBufferCacheClock &+= 1
-            entry.lastAccess = processedBufferCacheClock
-            processedBufferCache[key] = entry
-            return entry.buffer
-        }
-
-        guard let sourceRegion = try? AudioFileRegionReader.read(
-            url: url, sourceStart: clip.sourceStart, duration: clip.duration
-        ), let processed = TimelineEngine.processedBuffer(for: clip, sourceRegion: sourceRegion) else {
-            return nil
-        }
-        let bytes = Int(min(
-            Int64(Int.max),
-            Int64(processed.frameLength) * Int64(processed.format.channelCount) * Int64(MemoryLayout<Float>.size)
-        ))
-        guard bytes <= processedBufferCacheLimit else { return processed }
-
-        while processedBufferCacheBytes + bytes > processedBufferCacheLimit,
-              let oldestKey = processedBufferCache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key,
-              let oldest = processedBufferCache.removeValue(forKey: oldestKey) {
-            processedBufferCacheBytes -= oldest.byteCount
-        }
-        processedBufferCacheClock &+= 1
-        processedBufferCache[key] = ProcessedBufferEntry(buffer: processed, byteCount: bytes, lastAccess: processedBufferCacheClock)
-        processedBufferCacheBytes += bytes
-        return processed
-    }
-
     func invalidateAudioCaches() {
         waveformCache.removeAll(keepingCapacity: false)
-        processedBufferCache.removeAll(keepingCapacity: false)
-        processedBufferCacheBytes = 0
-        processedBufferCacheClock = 0
     }
 
     /// Downsampled peaks for the clip's whole source file (not just the trimmed

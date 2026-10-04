@@ -47,7 +47,7 @@ enum TimelineExporter {
             self.m4aQuality = m4aQuality
             self.metronomeEnabled = metronomeEnabled
             self.metronomeVolume = metronomeVolume
-            self.bpm = bpm
+            self.bpm = ProjectTempoLimits.clamped(bpm)
             self.beatsPerBar = beatsPerBar
         }
     }
@@ -105,6 +105,10 @@ enum TimelineExporter {
         var sourceFiles: [AVAudioFile] = []
         var metronomeNode: AVAudioPlayerNode?
         var metronomeBuffers: [AVAudioPCMBuffer] = []
+        let processedAudioDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("remixa-export-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: processedAudioDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: processedAudioDirectory) }
 
         for track in tracks {
             let player = AVAudioPlayerNode()
@@ -131,7 +135,7 @@ enum TimelineExporter {
         }
         engine.mainMixerNode.outputVolume = Float(masterVolume)
 
-        let maxFrames: AVAudioFrameCount = 4096
+        let maxFrames = AVAudioFrameCount((renderFormat.sampleRate * TimelineEngine.automationUpdateInterval).rounded())
         try engine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: maxFrames)
         try engine.start()
         defer { engine.stop() }
@@ -166,18 +170,35 @@ enum TimelineExporter {
                     sourceFiles.append(sourceFile)
                     continue
                 }
-                let sourceRegion = try AudioFileRegionReader.read(
-                    url: sourceClip.sourceURL, sourceStart: clip.sourceStart, duration: clip.duration
+                let clipDirectory = processedAudioDirectory.appendingPathComponent(
+                    "clip-\(clip.id.uuidString)", isDirectory: true
                 )
-                guard let processed = TimelineEngine.processedBuffer(for: clip, sourceRegion: sourceRegion) else {
+                do {
+                    try TimelineChunkRenderer.forEachChunk(
+                        for: clip,
+                        sourceURL: sourceClip.sourceURL,
+                        directoryURL: clipDirectory,
+                        consume: { chunk in
+                            let processedFile = try AVAudioFile(forReading: chunk.fileURL)
+                            let sampleTime = AVAudioFramePosition(
+                                ((clip.timelineStart + chunk.outputOffset) * renderFormat.sampleRate).rounded()
+                            )
+                            let atTime = AVAudioTime(sampleTime: sampleTime, atRate: renderFormat.sampleRate)
+                            player.scheduleSegment(
+                                processedFile,
+                                startingFrame: 0,
+                                frameCount: chunk.frameCount,
+                                at: atTime,
+                                completionHandler: nil
+                            )
+                            sourceFiles.append(processedFile)
+                        }
+                    )
+                } catch {
                     throw NSError(domain: "Remixa", code: 31, userInfo: [
-                        NSLocalizedDescriptionKey: "クリップ「\(clip.name)」のテンポ変換に失敗しました"
+                        NSLocalizedDescriptionKey: "クリップ「\(clip.name)」のテンポ/ピッチ変換に失敗しました: \(error.localizedDescription)"
                     ])
                 }
-                let delaySeconds = clip.timelineStart
-                let sampleTime = AVAudioFramePosition(delaySeconds * renderFormat.sampleRate)
-                let atTime = AVAudioTime(sampleTime: sampleTime, atRate: renderFormat.sampleRate)
-                player.scheduleBuffer(processed, at: atTime, options: [], completionHandler: nil)
             }
         }
 
@@ -374,7 +395,7 @@ enum TimelineExporter {
         guard options.bpm.isFinite, options.bpm > 0,
               options.beatsPerBar > 0, duration > 0 else { return [] }
 
-        let beatDuration = 60 / min(400, max(20, options.bpm))
+        let beatDuration = 60 / ProjectTempoLimits.clamped(options.bpm)
         let clickBuffers = [
             makeClickBuffer(format: format, frequency: 1_760, amplitude: 0.9),
             makeClickBuffer(format: format, frequency: 1_320, amplitude: 0.7)
