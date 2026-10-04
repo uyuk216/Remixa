@@ -71,6 +71,53 @@ enum MCPServer {
                 "bpm": prop("number", "BPM 値", "BPM value")
              ], required: ["bpm"])),
 
+        Tool(name: "project_set_timeline_settings", method: "project.setTimelineSettings",
+             descriptionJA: "スナップ単位と拍子を設定",
+             descriptionEN: "Set the snap division and time signature",
+             schema: schema([
+                "snapDivision": prop("string", "quarterBeat / halfBeat / beat / bar / off", "quarterBeat / halfBeat / beat / bar / off", extra: ["enum": ["quarterBeat", "halfBeat", "beat", "bar", "off"]]),
+                "timeSignature": prop("string", "拍子 4/4 または 3/4", "Time signature 4/4 or 3/4", extra: ["enum": ["4/4", "3/4"]])
+             ])),
+
+        Tool(name: "project_set_metronome", method: "project.setMetronome",
+             descriptionJA: "再生・書き出しメトロノーム、音量、1小節カウントインを設定",
+             descriptionEN: "Configure playback/export metronome, volume, and one-bar count-in",
+             schema: schema([
+                "playbackEnabled": prop("boolean", "再生メトロノーム", "Playback metronome"),
+                "exportEnabled": prop("boolean", "書き出しメトロノーム", "Export metronome"),
+                "volume": prop("number", "クリック音量 0〜1", "Click volume 0 to 1", extra: ["minimum": 0, "maximum": 1]),
+                "countIn": prop("boolean", "再生時に1小節カウントイン", "One-bar count-in on playback")
+             ])),
+
+        Tool(name: "project_set_key", method: "project.setKey",
+             descriptionJA: "プロジェクトのキーを設定（例: Cメジャー、Aマイナー、nullで解除）",
+             descriptionEN: "Set the project key (for example Cメジャー, Aマイナー, or null to clear)",
+             schema: schema([
+                "key": prop("string", "キー名。解除時はnull", "Key name; use null to clear", extra: ["type": ["string", "null"]])
+             ], required: ["key"])),
+
+        Tool(name: "marker_add", method: "marker.add",
+             descriptionJA: "指定した秒位置に名前付きマーカーを追加",
+             descriptionEN: "Add a named marker at a timeline time",
+             schema: schema([
+                "time": prop("number", "マーカー位置（秒）", "Marker time in seconds", extra: ["minimum": 0]),
+                "name": prop("string", "マーカー名（省略可）", "Marker name (optional)")
+             ], required: ["time"])),
+
+        Tool(name: "marker_update", method: "marker.update",
+             descriptionJA: "マーカー名または位置を変更",
+             descriptionEN: "Update a marker name or position",
+             schema: schema([
+                "markerId": prop("string", "マーカー ID", "Marker ID"),
+                "name": prop("string", "新しい名前", "New name"),
+                "time": prop("number", "新しい位置（秒）", "New time in seconds", extra: ["minimum": 0])
+             ], required: ["markerId"])),
+
+        Tool(name: "marker_remove", method: "marker.remove",
+             descriptionJA: "マーカーを削除",
+             descriptionEN: "Remove a marker",
+             schema: schema(["markerId": prop("string", "マーカー ID", "Marker ID")], required: ["markerId"])),
+
         Tool(name: "track_add", method: "track.add",
              descriptionJA: "トラックを追加（音声ファイルを同時に読み込み可能）",
              descriptionEN: "Add a track (optionally loading an audio file into it)",
@@ -128,8 +175,15 @@ enum MCPServer {
                 "syncToProject": prop("boolean", "プロジェクト BPM への同期（省略可）", "Sync to project BPM (optional)"),
                 "gain": prop("number", "ゲイン（省略可）", "Gain (optional)"),
                 "fadeIn": prop("number", "フェードイン（秒、省略可）", "Fade in seconds (optional)"),
-                "fadeOut": prop("number", "フェードアウト（秒、省略可）", "Fade out seconds (optional)")
+                "fadeOut": prop("number", "フェードアウト（秒、省略可）", "Fade out seconds (optional)"),
+                "pitchSemitones": prop("integer", "非破壊ピッチシフト（半音 -12〜12）", "Non-destructive pitch shift in semitones (-12 to 12)", extra: ["minimum": -12, "maximum": 12]),
+                "matchProjectKey": prop("boolean", "検出キーをプロジェクトキーへ合わせる", "Shift detected key to the project key")
              ], required: ["clipId"])),
+
+        Tool(name: "clip_detect_key", method: "clip.detectKey",
+             descriptionJA: "クリップのトリム範囲を解析してキーを推定",
+             descriptionEN: "Estimate the key of a clip's trimmed audio region",
+             schema: schema(["clipId": prop("string", "クリップ ID", "Clip ID")], required: ["clipId"])),
 
         Tool(name: "clip_sync_tempo", method: "clip.syncTempo",
              descriptionJA: "クリップのテンポをプロジェクト BPM に合わせて同期を有効にする",
@@ -204,8 +258,20 @@ enum MCPServer {
              descriptionEN: "Offline-export the full mix (waits until finished)",
              schema: schema([
                 "path": prop("string", "書き出し先パス", "Output path"),
-                "format": prop("string", "wav または m4a", "\"wav\" or \"m4a\"", extra: ["enum": ["wav", "m4a"]])
+                "format": prop("string", "wav または m4a", "\"wav\" or \"m4a\"", extra: ["enum": ["wav", "m4a"]]),
+                "wavEncoding": prop("string", "WAV: pcm24 または float32（省略時 pcm24）", "WAV: pcm24 or float32 (default pcm24)", extra: ["enum": ["pcm24", "float32"]]),
+                "m4aBitrate": prop("integer", "M4A: 128000 / 192000 / 256000 / 320000", "M4A bitrate: 128000 / 192000 / 256000 / 320000", extra: ["enum": [128000, 192000, 256000, 320000]])
              ], required: ["path", "format"])),
+
+        Tool(name: "export_stems", method: "export.stems",
+             descriptionJA: "各トラックを個別ファイルとして一括書き出し。メトロノームは別ステム",
+             descriptionEN: "Export each track to a separate file; metronome is its own stem",
+             schema: schema([
+                "directory": prop("string", "保存先フォルダ", "Output directory"),
+                "format": prop("string", "wav または m4a", "wav or m4a", extra: ["enum": ["wav", "m4a"]]),
+                "wavEncoding": prop("string", "WAV: pcm24 または float32", "WAV: pcm24 or float32", extra: ["enum": ["pcm24", "float32"]]),
+                "m4aBitrate": prop("integer", "M4Aビットレート", "M4A bitrate", extra: ["enum": [128000, 192000, 256000, 320000]])
+             ], required: ["directory", "format"])),
 
         Tool(name: "audio_analyze", method: "audio.analyze",
              descriptionJA: "音声ファイルを解析（長さ、サンプルレート、チャンネル数、BPM）",

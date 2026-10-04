@@ -19,8 +19,8 @@ final class AIAssistantRunner: ObservableObject {
         backend: AIBackendKind,
         executablePath: String,
         prompt: String,
-        onOutput: @escaping @Sendable (String) -> Void,
-        onFinish: @escaping @Sendable (Int32) -> Void
+        onOutput: @escaping @MainActor @Sendable (String) -> Void,
+        onFinish: @escaping @MainActor @Sendable (Int32) -> Void
     ) {
         cancel() // only one run at a time
 

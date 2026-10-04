@@ -88,9 +88,15 @@ struct RemixaApp: App {
                 }
             }
             CommandGroup(replacing: .undoRedo) {
-                Button("元に戻す") { project.undo() }
+                Button("元に戻す") {
+                    project.undo()
+                    timelineEngine.refreshPlaybackSchedule()
+                }
                     .keyboardShortcut("z", modifiers: [.command])
-                Button("やり直す") { project.redo() }
+                Button("やり直す") {
+                    project.redo()
+                    timelineEngine.refreshPlaybackSchedule()
+                }
                     .keyboardShortcut("z", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .newItem) {
@@ -116,6 +122,36 @@ struct RemixaApp: App {
                     NotificationCenter.default.post(name: .remixaSaveProjectAs, object: nil)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
+            }
+            CommandMenu("編集") {
+                Button("分割") { project.splitSelectedClips(at: timelineEngine.currentTime) }
+                    .keyboardShortcut("b", modifiers: [.command])
+                    .disabled(project.selectedClipIDs.isEmpty)
+                Button("複製") { project.duplicateSelectedClips() }
+                    .keyboardShortcut("d", modifiers: [.command])
+                    .disabled(project.selectedClipIDs.isEmpty)
+                Button("削除") { project.deleteSelectedClips() }
+                    .keyboardShortcut(.delete)
+                    .disabled(project.selectedClipIDs.isEmpty)
+            }
+            CommandMenu("タイムライン") {
+                Button("拡大") { NotificationCenter.default.post(name: .remixaZoomIn, object: nil) }
+                    .keyboardShortcut("+", modifiers: [.command])
+                Button("縮小") { NotificationCenter.default.post(name: .remixaZoomOut, object: nil) }
+                    .keyboardShortcut("-", modifiers: [.command])
+                Divider()
+                Button("全体を表示") { NotificationCenter.default.post(name: .remixaFitAll, object: nil) }
+                    .keyboardShortcut("0", modifiers: [.command])
+                Button("選択範囲に合わせる") { NotificationCenter.default.post(name: .remixaFitSelection, object: nil) }
+                    .keyboardShortcut("0", modifiers: [.command, .shift])
+                    .disabled(project.selectedClipIDs.isEmpty)
+                Button("再生位置へ移動") { NotificationCenter.default.post(name: .remixaScrollToPlayhead, object: nil) }
+                    .keyboardShortcut("j", modifiers: [.command])
+                Divider()
+                Button("先頭へ移動") { NotificationCenter.default.post(name: .remixaGoToStart, object: nil) }
+                    .keyboardShortcut(.home)
+                Button("先頭へ移動") { NotificationCenter.default.post(name: .remixaGoToStart, object: nil) }
+                    .keyboardShortcut(.return)
             }
         }
 
@@ -184,4 +220,10 @@ extension Notification.Name {
     static let remixaSaveProject = Notification.Name("remixaSaveProject")
     static let remixaSaveProjectAs = Notification.Name("remixaSaveProjectAs")
     static let remixaSeparateStems = Notification.Name("remixaSeparateStems")
+    static let remixaZoomIn = Notification.Name("remixaZoomIn")
+    static let remixaZoomOut = Notification.Name("remixaZoomOut")
+    static let remixaFitAll = Notification.Name("remixaFitAll")
+    static let remixaFitSelection = Notification.Name("remixaFitSelection")
+    static let remixaScrollToPlayhead = Notification.Name("remixaScrollToPlayhead")
+    static let remixaGoToStart = Notification.Name("remixaGoToStart")
 }

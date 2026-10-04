@@ -11,12 +11,15 @@ final class TimelineEngine: ObservableObject {
     @Published var currentTime: Double = 0
 
     private let engine = AVAudioEngine()
+    private let metronomePlayer = AVAudioPlayerNode()
     private var perTrack: [UUID: TrackNodes] = [:]
     private weak var project: RemixaProject?
     private var displayTimer: Timer?
 
     private var playbackAnchorWallTime: TimeInterval = 0
     private var playbackAnchorPosition: Double = 0
+    private var metronomeAttached = false
+    private var metronomeBuffers: [AVAudioPCMBuffer] = []
 
     private final class TrackNodes {
         let player = AVAudioPlayerNode()
@@ -37,6 +40,12 @@ final class TimelineEngine: ObservableObject {
         guard let project else { return }
         let wasPlaying = isPlaying
         if wasPlaying { stop() }
+
+        if !metronomeAttached {
+            engine.attach(metronomePlayer)
+            engine.connect(metronomePlayer, to: engine.mainMixerNode, format: Self.projectFormat)
+            metronomeAttached = true
+        }
 
         for nodes in perTrack.values {
             engine.disconnectNodeOutput(nodes.player)
@@ -84,7 +93,7 @@ final class TimelineEngine: ObservableObject {
     }
 
     @discardableResult
-    func play() -> Bool {
+    func play(skipCountIn: Bool = false) -> Bool {
         guard let project else { return false }
         if !engine.isRunning {
             engine.prepare()
@@ -101,6 +110,9 @@ final class TimelineEngine: ObservableObject {
 
         let startTime = currentTime
         let startHost = mach_absolute_time() &+ AVAudioTime.hostTime(forSeconds: 0.08)
+        let countInDuration = project.countInEnabled && !skipCountIn
+            ? Double(project.beatsPerBar) * 60.0 / max(project.bpm, 1)
+            : 0
 
         for track in project.tracks {
             guard let nodes = perTrack[track.id] else { continue }
@@ -109,7 +121,7 @@ final class TimelineEngine: ObservableObject {
             for clip in track.clips where clip.timelineEnd > startTime {
                 let clipInnerOffset = max(0, startTime - clip.timelineStart)
                 let scheduleDelay = max(0, clip.timelineStart - startTime)
-                let atHost = startHost &+ AVAudioTime.hostTime(forSeconds: scheduleDelay)
+                let atHost = startHost &+ AVAudioTime.hostTime(forSeconds: countInDuration + scheduleDelay)
 
                 if Self.canStreamDirectly(clip) {
                     let sourceURL = project.sourceURL(for: clip)
@@ -155,7 +167,14 @@ final class TimelineEngine: ObservableObject {
             nodes.player.play()
         }
 
-        playbackAnchorWallTime = ProcessInfo.processInfo.systemUptime + 0.08
+        scheduleMetronome(
+            project: project,
+            startTime: startTime,
+            startHost: startHost,
+            countInDuration: countInDuration
+        )
+
+        playbackAnchorWallTime = ProcessInfo.processInfo.systemUptime + 0.08 + countInDuration
         playbackAnchorPosition = startTime
         isPlaying = true
         startDisplayTimer()
@@ -164,6 +183,7 @@ final class TimelineEngine: ObservableObject {
 
     func pause() {
         for nodes in perTrack.values { nodes.player.pause() }
+        metronomePlayer.stop()
         isPlaying = false
         stopDisplayTimer()
     }
@@ -173,6 +193,7 @@ final class TimelineEngine: ObservableObject {
             nodes.player.stop()
             nodes.scheduledFiles.removeAll(keepingCapacity: false)
         }
+        metronomePlayer.stop()
         isPlaying = false
         currentTime = 0
         stopDisplayTimer()
@@ -184,8 +205,9 @@ final class TimelineEngine: ObservableObject {
             nodes.player.stop()
             nodes.scheduledFiles.removeAll(keepingCapacity: false)
         }
+        metronomePlayer.stop()
         currentTime = max(0, seconds)
-        if wasPlaying { _ = play() }
+        if wasPlaying { _ = play(skipCountIn: true) }
     }
 
     /// Rebuilds scheduled clip buffers at the current playhead after tempo edits.
@@ -193,10 +215,19 @@ final class TimelineEngine: ObservableObject {
         guard isPlaying else { return }
         let resumeAt = currentTime
         for nodes in perTrack.values { nodes.player.stop() }
+        metronomePlayer.stop()
         isPlaying = false
         stopDisplayTimer()
         currentTime = resumeAt
-        _ = play()
+        _ = play(skipCountIn: true)
+    }
+
+    func refreshMetronomeSettings() {
+        guard let project else { return }
+        metronomePlayer.volume = Float(min(1, max(0, project.metronomeVolume)))
+        guard isPlaying else { return }
+        let startHost = mach_absolute_time() &+ AVAudioTime.hostTime(forSeconds: 0.03)
+        scheduleMetronome(project: project, startTime: currentTime, startHost: startHost, countInDuration: 0)
     }
 
     private func startDisplayTimer() {
@@ -228,7 +259,7 @@ final class TimelineEngine: ObservableObject {
     }
 
     nonisolated static func canStreamDirectly(_ clip: Clip) -> Bool {
-        clip.tempoRate == 1.0 && clip.gain == 1.0 && clip.fadeIn <= 0 && clip.fadeOut <= 0
+        clip.tempoRate == 1.0 && clip.pitchSemitones == 0 && clip.gain == 1.0 && clip.fadeIn <= 0 && clip.fadeOut <= 0
     }
 
     /// Processes only the source interval already read for this clip.
@@ -258,19 +289,21 @@ final class TimelineEngine: ObservableObject {
             let start = AVAudioFramePosition(max(0, Double(slice.frameLength) / sampleRate - clip.fadeOut * rate) * sampleRate)
             slice.applyFade(from: start, to: AVAudioFramePosition(slice.frameLength), fadeIn: false)
         }
-        return rate == 1.0 ? slice : timeStretchedBuffer(slice, rate: rate)
+        return rate == 1.0 && clip.pitchSemitones == 0
+            ? slice
+            : timeStretchedBuffer(slice, rate: rate, pitchSemitones: Double(clip.pitchSemitones))
     }
 
     /// Stretches a clip independently so clips that overlap on one track can each
     /// have their own tempo rate. AVAudioUnitTimePitch keeps pitch at 0 semitones.
-    private nonisolated static func timeStretchedBuffer(_ buffer: AVAudioPCMBuffer, rate: Double) -> AVAudioPCMBuffer? {
+    private nonisolated static func timeStretchedBuffer(_ buffer: AVAudioPCMBuffer, rate: Double, pitchSemitones: Double) -> AVAudioPCMBuffer? {
         let format = buffer.format
         let expectedFrameCount = AVAudioFrameCount(max(1, (Double(buffer.frameLength) / rate).rounded()))
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         let timePitch = AVAudioUnitTimePitch()
         timePitch.rate = Float(rate)
-        timePitch.pitch = 0
+        timePitch.pitch = Float(pitchSemitones * 100)
         engine.attach(player)
         engine.attach(timePitch)
         engine.connect(player, to: timePitch, format: format)
@@ -346,6 +379,73 @@ final class TimelineEngine: ObservableObject {
         }
         result.frameLength = expectedFrameCount
         return result
+    }
+
+    private func scheduleMetronome(
+        project: RemixaProject,
+        startTime: Double,
+        startHost: UInt64,
+        countInDuration: Double
+    ) {
+        metronomePlayer.stop()
+        guard project.playbackMetronomeEnabled || countInDuration > 0,
+              project.bpm.isFinite, project.bpm > 0 else { return }
+
+        let beatDuration = 60.0 / project.bpm
+        if metronomeBuffers.isEmpty {
+            metronomeBuffers = [
+                Self.makeClickBuffer(frequency: 1_760, amplitude: 0.9),
+                Self.makeClickBuffer(frequency: 1_320, amplitude: 0.7)
+            ].compactMap { $0 }
+        }
+        guard metronomeBuffers.count == 2 else { return }
+        metronomePlayer.volume = Float(min(1, max(0, project.metronomeVolume)))
+
+        if countInDuration > 0 {
+            for beat in 0..<project.beatsPerBar {
+                let clickHost = startHost &+ AVAudioTime.hostTime(forSeconds: Double(beat) * beatDuration)
+                metronomePlayer.scheduleBuffer(
+                    metronomeBuffers[beat == 0 ? 0 : 1],
+                    at: AVAudioTime(hostTime: clickHost),
+                    options: [], completionHandler: nil
+                )
+            }
+        }
+
+        if project.playbackMetronomeEnabled {
+            let firstBeat = max(0, Int(ceil(startTime / beatDuration - 0.000_001)))
+            let endBeat = Int(ceil(project.projectDuration / beatDuration))
+            if firstBeat < endBeat {
+                for beat in firstBeat..<endBeat {
+                    let timelineTime = Double(beat) * beatDuration
+                    let delay = countInDuration + max(0, timelineTime - startTime)
+                    let clickHost = startHost &+ AVAudioTime.hostTime(forSeconds: delay)
+                    metronomePlayer.scheduleBuffer(
+                        metronomeBuffers[beat % project.beatsPerBar == 0 ? 0 : 1],
+                        at: AVAudioTime(hostTime: clickHost),
+                        options: [], completionHandler: nil
+                    )
+                }
+            }
+        }
+        metronomePlayer.play(at: AVAudioTime(hostTime: startHost))
+    }
+
+    private nonisolated static func makeClickBuffer(frequency: Double, amplitude: Float) -> AVAudioPCMBuffer? {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+        let frameCount = AVAudioFrameCount(format.sampleRate * 0.035)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else { return nil }
+        buffer.frameLength = frameCount
+        let angularFrequency = 2 * Double.pi * frequency
+        for frame in 0..<Int(frameCount) {
+            let time = Double(frame) / format.sampleRate
+            let envelope = exp(-time / 0.0045)
+            let sample = Float(sin(angularFrequency * time) * envelope) * amplitude
+            channels[0][frame] = sample
+            channels[1][frame] = sample
+        }
+        return buffer
     }
 }
 

@@ -2,6 +2,67 @@ import Foundation
 import AVFoundation
 import SwiftUI
 
+enum SnapDivision: String, Codable, CaseIterable, Sendable, Identifiable {
+    case quarterBeat
+    case halfBeat
+    case beat
+    case bar
+    case off
+
+    var id: String { rawValue }
+
+    var japaneseName: String {
+        switch self {
+        case .quarterBeat: return "1/4拍"
+        case .halfBeat: return "1/2拍"
+        case .beat: return "1拍"
+        case .bar: return "1小節"
+        case .off: return "オフ"
+        }
+    }
+}
+
+enum TimeSignature: String, Codable, CaseIterable, Sendable, Identifiable {
+    case fourFour = "4/4"
+    case threeFour = "3/4"
+
+    var id: String { rawValue }
+    var beatsPerBar: Int { self == .threeFour ? 3 : 4 }
+}
+
+enum KeyMode: String, Codable, Hashable, Sendable {
+    case major
+    case minor
+}
+
+struct MusicalKey: Codable, Equatable, Hashable, Sendable, Identifiable {
+    var tonic: Int
+    var mode: KeyMode
+
+    var id: String { "\(tonic)-\(mode.rawValue)" }
+    var name: String {
+        let notes = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
+        let note = notes[((tonic % 12) + 12) % 12]
+        return "\(note)\(mode == .major ? "メジャー" : "マイナー")"
+    }
+
+    static let all: [MusicalKey] = (0..<12).flatMap { tonic in
+        [MusicalKey(tonic: tonic, mode: .major), MusicalKey(tonic: tonic, mode: .minor)]
+    }
+}
+
+struct ProjectMarker: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var name: String
+    var time: Double
+
+    init(id: UUID = UUID(), name: String, time: Double) {
+        self.id = id
+        self.name = name
+        self.time = max(0, time)
+    }
+}
+
 /// A single audio region placed on a track's timeline.
 struct Clip: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
@@ -17,6 +78,8 @@ struct Clip: Identifiable, Codable, Equatable, Sendable {
     var tempoRate: Double = 1.0 // playback rate; duration remains measured in source seconds
     var sourceBPM: Double?
     var syncToProject: Bool = false
+    var pitchSemitones: Int = 0
+    var detectedKey: MusicalKey?
 
     var gain: Double = 1.0          // 0...2
     var fadeIn: Double = 0          // seconds
@@ -34,7 +97,7 @@ struct Clip: Identifiable, Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, audioPath, isRelative, timelineStart, sourceStart, duration
-        case gain, fadeIn, fadeOut, tempoRate, sourceBPM, syncToProject
+        case gain, fadeIn, fadeOut, tempoRate, sourceBPM, syncToProject, pitchSemitones, detectedKey
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +117,8 @@ struct Clip: Identifiable, Codable, Equatable, Sendable {
         let decodedBPM = try c.decodeIfPresent(Double.self, forKey: .sourceBPM)
         sourceBPM = decodedBPM.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         syncToProject = try c.decodeIfPresent(Bool.self, forKey: .syncToProject) ?? false
+        pitchSemitones = min(12, max(-12, try c.decodeIfPresent(Int.self, forKey: .pitchSemitones) ?? 0))
+        detectedKey = try c.decodeIfPresent(MusicalKey.self, forKey: .detectedKey)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -71,6 +136,8 @@ struct Clip: Identifiable, Codable, Equatable, Sendable {
         try c.encode(tempoRate, forKey: .tempoRate)
         try c.encodeIfPresent(sourceBPM, forKey: .sourceBPM)
         try c.encode(syncToProject, forKey: .syncToProject)
+        try c.encode(pitchSemitones, forKey: .pitchSemitones)
+        try c.encodeIfPresent(detectedKey, forKey: .detectedKey)
     }
 
     var timelineDuration: Double { duration / min(2.0, max(0.5, tempoRate)) }
@@ -194,6 +261,60 @@ struct ProjectSnapshot: Codable {
     var bpm: Double
     var masterVolume: Double
     var tracks: [TrackSnapshot]
+    var markers: [ProjectMarker] = []
+    var snapDivision: SnapDivision = .beat
+    var timeSignature: TimeSignature = .fourFour
+    var playbackMetronomeEnabled: Bool = false
+    var exportMetronomeEnabled: Bool = false
+    var metronomeVolume: Double = 0.4
+    var countInEnabled: Bool = false
+    var projectKey: MusicalKey?
+
+    private enum CodingKeys: String, CodingKey {
+        case bpm, masterVolume, tracks, markers, snapDivision, timeSignature
+        case playbackMetronomeEnabled, exportMetronomeEnabled, metronomeVolume, countInEnabled, projectKey
+    }
+
+    init(
+        bpm: Double,
+        masterVolume: Double,
+        tracks: [TrackSnapshot],
+        markers: [ProjectMarker] = [],
+        snapDivision: SnapDivision = .beat,
+        timeSignature: TimeSignature = .fourFour,
+        playbackMetronomeEnabled: Bool = false,
+        exportMetronomeEnabled: Bool = false,
+        metronomeVolume: Double = 0.4,
+        countInEnabled: Bool = false,
+        projectKey: MusicalKey? = nil
+    ) {
+        self.bpm = bpm
+        self.masterVolume = masterVolume
+        self.tracks = tracks
+        self.markers = markers
+        self.snapDivision = snapDivision
+        self.timeSignature = timeSignature
+        self.playbackMetronomeEnabled = playbackMetronomeEnabled
+        self.exportMetronomeEnabled = exportMetronomeEnabled
+        self.metronomeVolume = min(1, max(0, metronomeVolume))
+        self.countInEnabled = countInEnabled
+        self.projectKey = projectKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bpm = try c.decode(Double.self, forKey: .bpm)
+        masterVolume = try c.decode(Double.self, forKey: .masterVolume)
+        tracks = try c.decode([TrackSnapshot].self, forKey: .tracks)
+        markers = try c.decodeIfPresent([ProjectMarker].self, forKey: .markers) ?? []
+        snapDivision = try c.decodeIfPresent(SnapDivision.self, forKey: .snapDivision) ?? .beat
+        timeSignature = try c.decodeIfPresent(TimeSignature.self, forKey: .timeSignature) ?? .fourFour
+        playbackMetronomeEnabled = try c.decodeIfPresent(Bool.self, forKey: .playbackMetronomeEnabled) ?? false
+        exportMetronomeEnabled = try c.decodeIfPresent(Bool.self, forKey: .exportMetronomeEnabled) ?? false
+        metronomeVolume = min(1, max(0, try c.decodeIfPresent(Double.self, forKey: .metronomeVolume) ?? 0.4))
+        countInEnabled = try c.decodeIfPresent(Bool.self, forKey: .countInEnabled) ?? false
+        projectKey = try c.decodeIfPresent(MusicalKey.self, forKey: .projectKey)
+    }
 
     struct TrackSnapshot: Codable {
         var id: UUID
@@ -216,8 +337,16 @@ final class RemixaProject: ObservableObject {
     @Published var bpm: Double = 120
     @Published var masterVolume: Double = 1.0
     @Published var loopRegion: ClosedRange<Double>?
-    @Published var snapToGrid: Bool = true
-    @Published var selectedClipID: UUID?
+    @Published var snapDivision: SnapDivision = .beat
+    @Published var timeSignature: TimeSignature = .fourFour
+    @Published var markers: [ProjectMarker] = []
+    @Published var playbackMetronomeEnabled = false
+    @Published var exportMetronomeEnabled = false
+    @Published var metronomeVolume = 0.4
+    @Published var countInEnabled = false
+    @Published var projectKey: MusicalKey?
+    @Published var selectedClipIDs: Set<UUID> = []
+    @Published var previewMoveDelta: Double = 0
     @Published var fileURL: URL?
     @Published var isDirty: Bool = false
     @Published var errorMessage: String?
@@ -235,6 +364,7 @@ final class RemixaProject: ObservableObject {
         let sourceStart: UInt64
         let duration: UInt64
         let tempoRate: UInt64
+        let pitchSemitones: Int
         let gain: UInt64
         let fadeIn: UInt64
         let fadeOut: UInt64
@@ -256,6 +386,22 @@ final class RemixaProject: ObservableObject {
     private var coalescedUndoSnapshot: ProjectSnapshot?
     private var coalescedUndoHasChanges = false
     private(set) var projectSessionID = UUID()
+    private var selectionAnchorClipID: UUID?
+
+    var selectedClipID: UUID? {
+        get {
+            if let selectionAnchorClipID, selectedClipIDs.contains(selectionAnchorClipID) {
+                return selectionAnchorClipID
+            }
+            return selectedClipIDs.sorted { $0.uuidString < $1.uuidString }.first
+        }
+        set {
+            selectedClipIDs = newValue.map { [$0] } ?? []
+            selectionAnchorClipID = newValue
+        }
+    }
+
+    var beatsPerBar: Int { timeSignature.beatsPerBar }
 
     private struct ActiveStemRun {
         let sessionID: UUID
@@ -290,13 +436,29 @@ final class RemixaProject: ObservableObject {
                     volume: $0.volume, pan: $0.pan, mute: $0.mute, solo: $0.solo,
                     effects: EffectsRackSettingsCodable(settings: $0.effects)
                 )
-            }
+            },
+            markers: markers,
+            snapDivision: snapDivision,
+            timeSignature: timeSignature,
+            playbackMetronomeEnabled: playbackMetronomeEnabled,
+            exportMetronomeEnabled: exportMetronomeEnabled,
+            metronomeVolume: metronomeVolume,
+            countInEnabled: countInEnabled,
+            projectKey: projectKey
         )
     }
 
     private func restore(_ snap: ProjectSnapshot) {
         bpm = snap.bpm
         masterVolume = snap.masterVolume
+        markers = snap.markers
+        snapDivision = snap.snapDivision
+        timeSignature = snap.timeSignature
+        playbackMetronomeEnabled = snap.playbackMetronomeEnabled
+        exportMetronomeEnabled = snap.exportMetronomeEnabled
+        metronomeVolume = snap.metronomeVolume
+        countInEnabled = snap.countInEnabled
+        projectKey = snap.projectKey
         tracks = snap.tracks.map { ts in
             let t = Track(id: ts.id, name: ts.name, clips: ts.clips)
             t.volume = ts.volume; t.pan = ts.pan; t.mute = ts.mute; t.solo = ts.solo
@@ -369,14 +531,241 @@ final class RemixaProject: ObservableObject {
         coalescedUndoHasChanges = false
     }
 
+    func selectClip(_ clipID: UUID, command: Bool = false, shift: Bool = false) {
+        if shift, let anchor = selectionAnchorClipID,
+           let track = tracks.first(where: { $0.clips.contains(where: { $0.id == clipID }) }) {
+            let orderedClips = track.clips.sorted(by: {
+                $0.timelineStart == $1.timelineStart
+                    ? $0.id.uuidString < $1.id.uuidString
+                    : $0.timelineStart < $1.timelineStart
+            })
+            if let anchorIndex = orderedClips.firstIndex(where: { $0.id == anchor }),
+               let targetIndex = orderedClips.firstIndex(where: { $0.id == clipID }) {
+                let lower = min(anchorIndex, targetIndex)
+                let upper = max(anchorIndex, targetIndex)
+                selectedClipIDs = Set(orderedClips[lower...upper].map(\.id))
+                return
+            }
+            selectedClipIDs = [clipID]
+            selectionAnchorClipID = clipID
+        } else if command {
+            if selectedClipIDs.contains(clipID) {
+                selectedClipIDs.remove(clipID)
+            } else {
+                selectedClipIDs.insert(clipID)
+                selectionAnchorClipID = clipID
+            }
+        } else {
+            selectedClipIDs = [clipID]
+            selectionAnchorClipID = clipID
+        }
+    }
+
+    func addMarker(at seconds: Double, name: String? = nil) -> ProjectMarker {
+        pushUndo()
+        let marker = ProjectMarker(name: name?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? "マーカー \(markers.count + 1)", time: seconds)
+        markers.append(marker)
+        markers.sort { $0.time < $1.time }
+        return marker
+    }
+
+    func updateMarker(id: UUID, name: String? = nil, time: Double? = nil) {
+        guard let index = markers.firstIndex(where: { $0.id == id }) else { return }
+        var updated = markers[index]
+        if let name { updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? updated.name }
+        if let time, time.isFinite { updated.time = max(0, time) }
+        guard updated != markers[index] else { return }
+        registerEdit()
+        markers[index] = updated
+        markers.sort { $0.time < $1.time }
+    }
+
+    func deleteMarker(id: UUID) {
+        guard markers.contains(where: { $0.id == id }) else { return }
+        registerEdit()
+        markers.removeAll { $0.id == id }
+    }
+
+    func setTimelineSettings(snapDivision: SnapDivision? = nil, timeSignature: TimeSignature? = nil) {
+        let nextSnap = snapDivision ?? self.snapDivision
+        let nextSignature = timeSignature ?? self.timeSignature
+        guard nextSnap != self.snapDivision || nextSignature != self.timeSignature else { return }
+        registerEdit()
+        self.snapDivision = nextSnap
+        self.timeSignature = nextSignature
+    }
+
+    func setMetronomeSettings(
+        playbackEnabled: Bool? = nil,
+        exportEnabled: Bool? = nil,
+        volume: Double? = nil,
+        countIn: Bool? = nil
+    ) {
+        let nextPlayback = playbackEnabled ?? playbackMetronomeEnabled
+        let nextExport = exportEnabled ?? exportMetronomeEnabled
+        let nextVolume = min(1, max(0, volume ?? metronomeVolume))
+        let nextCountIn = countIn ?? countInEnabled
+        guard nextPlayback != playbackMetronomeEnabled || nextExport != exportMetronomeEnabled
+                || nextVolume != metronomeVolume || nextCountIn != countInEnabled else { return }
+        registerEdit()
+        playbackMetronomeEnabled = nextPlayback
+        exportMetronomeEnabled = nextExport
+        metronomeVolume = nextVolume
+        countInEnabled = nextCountIn
+    }
+
+    func setProjectKey(_ key: MusicalKey?) {
+        guard key != projectKey else { return }
+        registerEdit()
+        projectKey = key
+    }
+
+    func setDetectedKey(_ key: MusicalKey, for clipID: UUID) {
+        guard let (track, clip) = findClip(clipID),
+              let index = track.clips.firstIndex(where: { $0.id == clipID }),
+              clip.detectedKey != key else { return }
+        registerEdit()
+        track.clips[index].detectedKey = key
+        objectWillChange.send()
+    }
+
+    func setClipPitch(_ semitones: Int, clipID: UUID) {
+        guard let (track, _) = findClip(clipID),
+              let index = track.clips.firstIndex(where: { $0.id == clipID }) else { return }
+        let pitch = min(12, max(-12, semitones))
+        guard track.clips[index].pitchSemitones != pitch else { return }
+        registerEdit()
+        track.clips[index].pitchSemitones = pitch
+        objectWillChange.send()
+    }
+
+    func matchClipToProjectKey(clipID: UUID) throws {
+        guard let projectKey,
+              let (track, _) = findClip(clipID),
+              let index = track.clips.firstIndex(where: { $0.id == clipID }),
+              let detectedKey = track.clips[index].detectedKey else {
+            throw NSError(domain: "Remixa", code: 54, userInfo: [NSLocalizedDescriptionKey: "プロジェクトのキーと検出済みのクリップキーが必要です"])
+        }
+        var shift = (projectKey.tonic - detectedKey.tonic + 12) % 12
+        if shift > 6 { shift -= 12 }
+        setClipPitch(shift, clipID: clipID)
+    }
+
+    func setPreviewMoveDelta(_ delta: Double) {
+        previewMoveDelta = delta.isFinite ? delta : 0
+    }
+
+    func moveSelectedClips(by delta: Double) {
+        guard delta.isFinite, delta != 0 else { previewMoveDelta = 0; return }
+        let selectedClips = tracks.flatMap { $0.clips.filter { selectedClipIDs.contains($0.id) } }
+        guard let earliestStart = selectedClips.map(\.timelineStart).min() else {
+            previewMoveDelta = 0
+            return
+        }
+        var sharedDelta = snapped(delta)
+        if earliestStart + sharedDelta < 0 { sharedDelta = -earliestStart }
+        guard sharedDelta != 0 else { previewMoveDelta = 0; return }
+        var updatedByTrack: [UUID: [Clip]] = [:]
+        for track in tracks {
+            let updated = track.clips.map { clip -> Clip in
+                guard selectedClipIDs.contains(clip.id) else { return clip }
+                var copy = clip
+                copy.timelineStart = max(0, clip.timelineStart + sharedDelta)
+                return copy
+            }
+            if updated != track.clips { updatedByTrack[track.id] = updated }
+        }
+        previewMoveDelta = 0
+        guard !updatedByTrack.isEmpty else { return }
+        registerEdit()
+        for track in tracks {
+            if let updated = updatedByTrack[track.id] { track.clips = updated }
+        }
+        objectWillChange.send()
+    }
+
+    func duplicateSelectedClips() {
+        let selected = tracks.flatMap { track in track.clips.filter { selectedClipIDs.contains($0.id) }.map { (track, $0) } }
+        guard !selected.isEmpty else { return }
+        pushUndo()
+        let offset = (selected.map { $0.1.timelineEnd }.max() ?? 0) - (selected.map { $0.1.timelineStart }.min() ?? 0)
+        var newIDs = Set<UUID>()
+        for (track, clip) in selected {
+            var copy = clip
+            copy.id = UUID()
+            copy.timelineStart = clip.timelineStart + offset
+            track.clips.append(copy)
+            newIDs.insert(copy.id)
+        }
+        selectedClipIDs = newIDs
+        selectionAnchorClipID = newIDs.sorted { $0.uuidString < $1.uuidString }.first
+        objectWillChange.send()
+    }
+
+    func deleteSelectedClips() {
+        guard !selectedClipIDs.isEmpty else { return }
+        pushUndo()
+        let deletingIDs = selectedClipIDs
+        for track in tracks {
+            for clip in track.clips where deletingIDs.contains(clip.id) {
+                cancelActiveStemSeparations(forClipID: clip.id)
+            }
+            track.clips.removeAll { deletingIDs.contains($0.id) }
+        }
+        selectedClipIDs.removeAll()
+        objectWillChange.send()
+    }
+
+    func splitSelectedClips(at playhead: Double) {
+        guard playhead.isFinite,
+              tracks.contains(where: { track in
+                  track.clips.contains { selectedClipIDs.contains($0.id) && playhead > $0.timelineStart && playhead < $0.timelineEnd }
+              }) else { return }
+        pushUndo()
+        var newSelection = Set<UUID>()
+        for track in tracks {
+            var updatedClips: [Clip] = []
+            for clip in track.clips {
+                guard selectedClipIDs.contains(clip.id), playhead > clip.timelineStart, playhead < clip.timelineEnd else {
+                    updatedClips.append(clip)
+                    continue
+                }
+                cancelActiveStemSeparations(forClipID: clip.id)
+                let offset = min(clip.duration, max(0, playhead - clip.timelineStart) * clip.tempoRate)
+                var left = clip
+                left.duration = offset
+                var right = clip
+                right.id = UUID()
+                right.timelineStart = playhead
+                right.sourceStart = clip.sourceStart + offset
+                right.duration = clip.duration - offset
+                updatedClips.append(left)
+                updatedClips.append(right)
+                newSelection.insert(left.id)
+                newSelection.insert(right.id)
+            }
+            track.clips = updatedClips
+        }
+        if !newSelection.isEmpty { selectedClipIDs = newSelection }
+        objectWillChange.send()
+    }
+
     /// Replaces all persisted project content and starts a fresh undo session.
     func replaceContents(with loaded: RemixaProject) {
         cancelAllActiveStemSeparations()
         tracks = loaded.tracks
         bpm = loaded.bpm
         masterVolume = loaded.masterVolume
+        markers = loaded.markers
+        snapDivision = loaded.snapDivision
+        timeSignature = loaded.timeSignature
+        playbackMetronomeEnabled = loaded.playbackMetronomeEnabled
+        exportMetronomeEnabled = loaded.exportMetronomeEnabled
+        metronomeVolume = loaded.metronomeVolume
+        countInEnabled = loaded.countInEnabled
+        projectKey = loaded.projectKey
         loopRegion = nil
-        selectedClipID = nil
+        selectedClipIDs = []
         fileURL = loaded.fileURL
         isDirty = false
         errorMessage = nil
@@ -551,7 +940,8 @@ final class RemixaProject: ObservableObject {
         syncToProject: Bool? = nil,
         gain: Double? = nil,
         fadeIn: Double? = nil,
-        fadeOut: Double? = nil
+        fadeOut: Double? = nil,
+        pitchSemitones: Int? = nil
     ) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
         var updated = track.clips[index]
@@ -604,6 +994,7 @@ final class RemixaProject: ObservableObject {
         if let gain { updated.gain = gain }
         if let fadeIn { updated.fadeIn = fadeIn }
         if let fadeOut { updated.fadeOut = fadeOut }
+        if let pitchSemitones { updated.pitchSemitones = min(12, max(-12, pitchSemitones)) }
         guard updated != track.clips[index] else { return }
         cancelActiveStemSeparations(forClipID: clip.id)
         registerEdit()
@@ -695,7 +1086,7 @@ final class RemixaProject: ObservableObject {
         cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
         track.clips.removeAll { $0.id == clip.id }
-        if selectedClipID == clip.id { selectedClipID = nil }
+        selectedClipIDs.remove(clip.id)
     }
 
     /// Replaces a clip's audio wholesale (used when the v0.1 clip editor commits an edit).
@@ -730,9 +1121,17 @@ final class RemixaProject: ObservableObject {
     }
 
     private func snapped(_ seconds: Double) -> Double {
-        guard snapToGrid, bpm > 0 else { return seconds }
+        guard snapDivision != .off, bpm > 0 else { return seconds }
         let beat = 60.0 / bpm
-        return (seconds / beat).rounded() * beat
+        let interval: Double
+        switch snapDivision {
+        case .quarterBeat: interval = beat / 4
+        case .halfBeat: interval = beat / 2
+        case .beat: interval = beat
+        case .bar: interval = beat * Double(beatsPerBar)
+        case .off: return seconds
+        }
+        return (seconds / interval).rounded() * interval
     }
 
     // MARK: - Audio loading
@@ -758,6 +1157,7 @@ final class RemixaProject: ObservableObject {
             sourceStart: clip.sourceStart.bitPattern,
             duration: clip.duration.bitPattern,
             tempoRate: clip.tempoRate.bitPattern,
+            pitchSemitones: clip.pitchSemitones,
             gain: clip.gain.bitPattern,
             fadeIn: clip.fadeIn.bitPattern,
             fadeOut: clip.fadeOut.bitPattern
@@ -965,10 +1365,23 @@ final class RemixaProject: ObservableObject {
         masterVolume = 1.0
         loopRegion = nil
         selectedClipID = nil
+        markers = []
+        snapDivision = .beat
+        timeSignature = .fourFour
+        playbackMetronomeEnabled = false
+        exportMetronomeEnabled = false
+        metronomeVolume = 0.4
+        countInEnabled = false
+        projectKey = nil
+        selectedClipIDs = []
         fileURL = nil
         isDirty = false
         invalidateAudioCaches()
         errorMessage = nil
         clearUndoHistory()
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

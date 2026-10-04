@@ -43,6 +43,9 @@ struct ContentView: View {
         .onChange(of: project.tracks.count) { _, _ in timelineEngine.rebuildGraph() }
         .onChange(of: project.mixStateRevision) { _, _ in timelineEngine.syncMixState() }
         .onChange(of: project.bpm) { _, _ in timelineEngine.refreshPlaybackSchedule() }
+        .onChange(of: project.playbackMetronomeEnabled) { _, _ in timelineEngine.refreshMetronomeSettings() }
+        .onChange(of: project.metronomeVolume) { _, _ in timelineEngine.refreshMetronomeSettings() }
+        .onChange(of: project.timeSignature) { _, _ in timelineEngine.refreshMetronomeSettings() }
         .onReceive(NotificationCenter.default.publisher(for: .remixaAddAudioTrack)) { _ in
             addAudioTrack()
         }
@@ -153,11 +156,13 @@ struct ContentView: View {
     }
 
     private func handleDropOnEmptyArea(providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        _ = provider.loadObject(ofClass: URL.self) { url, _ in
-            guard let url else { return }
-            Task { @MainActor in
-                _ = project.addTrackOrFillFirstEmpty(named: url.deletingPathExtension().lastPathComponent, audioURL: url)
+        guard !providers.isEmpty else { return false }
+        for provider in providers {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in
+                    _ = project.addTrackOrFillFirstEmpty(named: url.deletingPathExtension().lastPathComponent, audioURL: url)
+                }
             }
         }
         return true

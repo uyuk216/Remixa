@@ -20,7 +20,15 @@ remixa - Remixa.app 制御用コマンドラインツール / CLI for controllin
   remixa play [sec]                 再生開始（位置省略可）
   remixa stop                       再生停止
   remixa seek <sec>                 再生位置を移動
-  remixa export <out.wav|out.m4a>   ミックスを書き出し
+  remixa snap <unit> [4/4|3/4]      スナップ単位と拍子を設定
+  remixa metronome <option> <value> メトロノーム設定 (playback/export/count-in/volume)
+  remixa key <name|none>            プロジェクトのキーを設定
+  remixa clip-key <clipId>           クリップのキーを検出
+  remixa marker-add <sec> [name]     再生位置に名前付きマーカーを追加
+  remixa marker-update <id> [opts]   マーカー名・位置を変更 (--name / --time)
+  remixa marker-remove <id>          マーカーを削除
+  remixa export <out.wav|out.m4a>    ミックスを書き出し (--wav pcm24|float32, --m4a-bitrate 128000|192000|256000|320000)
+  remixa export-stems <directory> [wav|m4a] トラック別に書き出し (--wav pcm24|float32, --m4a-bitrate ...)
   remixa analyze <audio>            音声ファイルを解析
   remixa state                      プロジェクトの全状態を JSON で出力
   remixa stems status               AI パート分離環境の状態を表示
@@ -39,6 +47,11 @@ remixa - Remixa.app 制御用コマンドラインツール / CLI for controllin
   remixa bpm 128
   remixa play
   remixa export ~/Desktop/mix.wav
+  remixa snap halfBeat 3/4
+  remixa key Cメジャー
+  remixa marker-add 32 "サビ"
+  remixa export ~/Desktop/mix.wav --wav float32
+  remixa export-stems ~/Desktop/stems m4a
   remixa call track.update '{"trackId":"...","volume":0.8}'
 """
 
@@ -149,11 +162,104 @@ case "seek":
     guard let s = args.first, let sec = Double(s) else { printErrorAndExit("使い方: remixa seek <sec>") }
     runCall(method: "transport.seek", params: ["time": sec])
 
+case "snap":
+    guard let unit = args.first else { printErrorAndExit("使い方: remixa snap <quarterBeat|halfBeat|beat|bar|off> [4/4|3/4]") }
+    var params: [String: Any] = ["snapDivision": unit]
+    if args.count > 1 { params["timeSignature"] = args[1] }
+    runCall(method: "project.setTimelineSettings", params: params)
+
+case "metronome":
+    guard args.count > 1 else { printErrorAndExit("使い方: remixa metronome playback|export|count-in|volume <on|off|0...1>") }
+    let option = args[0]
+    let value = args[1]
+    let params: [String: Any]
+    switch option {
+    case "playback": params = ["playbackEnabled": parseBoolean(value)]
+    case "export": params = ["exportEnabled": parseBoolean(value)]
+    case "count-in": params = ["countIn": parseBoolean(value)]
+    case "volume":
+        guard let volume = Double(value), volume.isFinite, (0...1).contains(volume) else {
+            printErrorAndExit("音量は0〜1の数値で指定してください")
+        }
+        params = ["volume": volume]
+    default:
+        printErrorAndExit("metronome の項目は playback / export / count-in / volume です")
+    }
+    runCall(method: "project.setMetronome", params: params)
+
+case "key":
+    guard let key = args.first else { printErrorAndExit("使い方: remixa key <Cメジャー|Aマイナー|none>") }
+    let value: Any = key.lowercased() == "none" ? NSNull() : key
+    runCall(method: "project.setKey", params: ["key": value])
+
+case "clip-key":
+    guard let clipId = args.first else { printErrorAndExit("使い方: remixa clip-key <clipId>") }
+    runCall(method: "clip.detectKey", params: ["clipId": clipId])
+
+case "marker-add":
+    guard let rawTime = args.first, let time = Double(rawTime) else { printErrorAndExit("使い方: remixa marker-add <sec> [name]") }
+    let name = args.count > 1 ? args.dropFirst().joined(separator: " ") : nil
+    var params: [String: Any] = ["time": time]
+    if let name { params["name"] = name }
+    runCall(method: "marker.add", params: params)
+
+case "marker-update":
+    guard let markerId = args.first else { printErrorAndExit("使い方: remixa marker-update <id> [--name name] [--time sec]") }
+    var params: [String: Any] = ["markerId": markerId]
+    var i = 1
+    while i < args.count {
+        if args[i] == "--name", i + 1 < args.count {
+            params["name"] = args[i + 1]
+            i += 2
+        } else if args[i] == "--time", i + 1 < args.count, let time = Double(args[i + 1]) {
+            params["time"] = time
+            i += 2
+        } else {
+            printErrorAndExit("不明な marker-update オプションです: \(args[i])")
+        }
+    }
+    runCall(method: "marker.update", params: params)
+
+case "marker-remove":
+    guard let markerId = args.first else { printErrorAndExit("使い方: remixa marker-remove <id>") }
+    runCall(method: "marker.remove", params: ["markerId": markerId])
+
 case "export":
     guard let out = args.first else { printErrorAndExit("使い方: remixa export <out.wav|out.m4a>") }
     let ext = (out as NSString).pathExtension.lowercased()
     let format = (ext == "m4a") ? "m4a" : "wav"
-    runCall(method: "export.mix", params: ["path": absolutePath(out), "format": format])
+    var params: [String: Any] = ["path": absolutePath(out), "format": format]
+    var i = 1
+    while i < args.count {
+        if args[i] == "--wav", i + 1 < args.count {
+            params["wavEncoding"] = args[i + 1]
+            i += 2
+        } else if args[i] == "--m4a-bitrate", i + 1 < args.count, let bitrate = Int(args[i + 1]) {
+            params["m4aBitrate"] = bitrate
+            i += 2
+        } else {
+            printErrorAndExit("不明な export オプションです: \(args[i])")
+        }
+    }
+    runCall(method: "export.mix", params: params)
+
+case "export-stems":
+    guard let directory = args.first else { printErrorAndExit("使い方: remixa export-stems <directory> [wav|m4a]") }
+    let format = args.count > 1 ? args[1].lowercased() : "wav"
+    var params: [String: Any] = ["directory": absolutePath(directory), "format": format]
+    var i = min(2, args.count)
+    while i < args.count {
+        if args[i] == "--wav", i + 1 < args.count {
+            params["wavEncoding"] = args[i + 1]
+            i += 2
+        } else if args[i] == "--m4a-bitrate", i + 1 < args.count, let bitrate = Int(args[i + 1]) {
+            params["m4aBitrate"] = bitrate
+            i += 2
+        } else {
+            printErrorAndExit("不明な export-stems オプションです: \(args[i])")
+        }
+    }
+    runCall(method: "export.stems", params: params)
 
 case "analyze":
     guard let audio = args.first else { printErrorAndExit("使い方: remixa analyze <audio>") }
@@ -219,6 +325,14 @@ func absolutePath(_ path: String) -> String {
     }
     let cwd = FileManager.default.currentDirectoryPath
     return (cwd as NSString).appendingPathComponent(path)
+}
+
+func parseBoolean(_ value: String) -> Bool {
+    switch value.lowercased() {
+    case "on", "true", "1", "yes": return true
+    case "off", "false", "0", "no": return false
+    default: printErrorAndExit("真偽値は on または off で指定してください")
+    }
 }
 
 func installCLI() {

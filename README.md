@@ -10,6 +10,7 @@ Remixa は macOS 用のネイティブ音楽リミックスアプリです。Swi
 - シンプルなマルチトラック DAW（v0.2）
 - AI によるステム分離（v0.3。モデルは初回利用時にダウンロードされ、アプリには同梱されません）
 - クリップ単位のテンポ同期（v0.4）
+- マーカー、メトロノーム、複数選択、非破壊ピッチ変更、ステム書き出し（v0.5）
 
 ### v0.1 の主な機能
 
@@ -61,6 +62,37 @@ MCP からは `stems_status` / `stems_install` / `stems_separate` ツールと�
 - 「BPM に合わせる」でクリップの元 BPM からプロジェクト BPM に同期できます。元 BPM が未設定なら音源から推定して保存します。同期を有効にしたクリップは、プロジェクト BPM の変更にも追従します
 - 拍グリッドへの開始位置スナップと、クリップ内の音源内容を ±10 ms / ±1 拍ずらすナッジに対応します
 - テンポ倍率と元 BPM はクリップ上に表示され、編集シートから同期設定を変更できます。テンポ設定は保存・読み込み、Undo/Redo、トリム、分割、複製にも保持されます
+
+### v0.5 の主な機能
+
+- クリップは Command+クリックで複数選択、Shift+クリックで範囲選択できます。選択したクリップをまとめて移動・複製・削除できます。トラックへの音声ドロップは落とした位置に配置され、複数ファイルもすべて読み込みます。クリップ編集シートはトリム範囲の音声だけを編集対象にします
+- 名前付きマーカーの追加、移動、名前変更、削除ができ、プロジェクト保存と Undo/Redo に対応します。マーカーをクリックするとその位置へ移動します
+- 拍子は 4/4 または 3/4、スナップは 1/4拍・1/2拍・1拍・1小節・オフから選べます。「全体を表示」「選択範囲に合わせる」「再生位置へ移動」と、再生中の再生ヘッド自動スクロールを追加しました
+- 再生用・書き出し用メトロノームを個別にオン/オフできます。クリック音量を調整でき、再生時には1小節のカウントインを設定できます
+- クリップのトリム範囲をクロマと Krumhansl プロファイルで簡易解析し、推定キーを表示します。クリップごとのピッチを±12半音で非破壊変更し、検出キーをプロジェクトキーへ合わせられます。ピッチ変更はテンポ同期と同じ再生・書き出し経路で処理されます
+- よく使う編集操作をメニューに追加しました: 分割 (⌘B)、複製 (⌘D)、削除 (Delete)、拡大/縮小 (⌘+/⌘−)、全体表示 (⌘0)、選択範囲表示 (⇧⌘0)、再生位置へ移動 (⌘J)、先頭へ移動 (Home/Return)
+- 書き出しは WAV 24-bit PCM / 32-bit float、M4A 128 / 192 / 256 / 320 kbps を選べます。トラック別に一括書き出しでき、メトロノームは別のステムになります
+
+#### v0.5 CLI / MCP 操作
+
+```sh
+remixa snap halfBeat 3/4
+remixa metronome playback on
+remixa metronome export on
+remixa metronome count-in on
+remixa metronome volume 0.6
+remixa key Cメジャー
+remixa clip-key <clipId>
+remixa marker-add 32 "サビ"
+remixa marker-update <markerId> --name "ラスサビ" --time 48
+remixa marker-remove <markerId>
+remixa export ~/Desktop/mix.wav --wav float32
+remixa export ~/Desktop/mix.m4a --m4a-bitrate 320000
+remixa export-stems ~/Desktop/stems wav --wav float32
+remixa call clip.update '{"clipId":"...","pitchSemitones":-2,"matchProjectKey":true}'
+```
+
+MCP では `project_set_timeline_settings`、`project_set_metronome`、`project_set_key`、`marker_add` / `marker_update` / `marker_remove`、`clip_detect_key`、`export_mix`、`export_stems` を利用できます。クリップのピッチは `clip_update` の `pitchSemitones`、キー合わせは `matchProjectKey` で指定します。エクスポートの品質は WAV で `wavEncoding` (`pcm24` / `float32`)、M4A で `m4aBitrate` (`128000` / `192000` / `256000` / `320000`) を指定できます。
 
 ## インストール（Releases から）
 
@@ -158,6 +190,7 @@ xcodebuild -project Remixa.xcodeproj -scheme Remixa -configuration Debug build
 - **v0.2**（本リリース）: シンプルなマルチトラック DAW（タイムライン、クリップ編集、トラックミキサー、プロジェクト保存/読み込み、ミックス書き出し）
 - **v0.3**（本リリース）: AI によるステム分離（Demucs、モデルは初回利用時にダウンロード）、CLI/MCP からの `stems status`/`install`/`separate` 操作
 - **v0.4**: クリップ単位のテンポ同期、プロジェクト BPM への自動追従、拍スナップとナッジ、CLI/MCP の `clip.update` / `clip.syncTempo` 操作
+- **v0.5**: 名前付きマーカー、メトロノーム/カウントイン、拍子・スナップ選択、複数クリップ編集、キー検出/非破壊ピッチ、WAV/M4A品質選択とステム書き出し、CLI/MCP 制御
 
 ## ライセンス
 

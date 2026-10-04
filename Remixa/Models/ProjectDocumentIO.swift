@@ -108,7 +108,19 @@ enum ProjectDocumentIO {
             )
         }
 
-        let snapshot = ProjectSnapshot(bpm: project.bpm, masterVolume: project.masterVolume, tracks: snapshotTracks)
+        let snapshot = ProjectSnapshot(
+            bpm: project.bpm,
+            masterVolume: project.masterVolume,
+            tracks: snapshotTracks,
+            markers: project.markers,
+            snapDivision: project.snapDivision,
+            timeSignature: project.timeSignature,
+            playbackMetronomeEnabled: project.playbackMetronomeEnabled,
+            exportMetronomeEnabled: project.exportMetronomeEnabled,
+            metronomeVolume: project.metronomeVolume,
+            countInEnabled: project.countInEnabled,
+            projectKey: project.projectKey
+        )
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: stagingURL.appendingPathComponent(projectFileName), options: .atomic)
 
@@ -160,6 +172,14 @@ enum ProjectDocumentIO {
         let project = RemixaProject()
         project.bpm = snapshot.bpm
         project.masterVolume = snapshot.masterVolume
+        project.markers = snapshot.markers
+        project.snapDivision = snapshot.snapDivision
+        project.timeSignature = snapshot.timeSignature
+        project.playbackMetronomeEnabled = snapshot.playbackMetronomeEnabled
+        project.exportMetronomeEnabled = snapshot.exportMetronomeEnabled
+        project.metronomeVolume = snapshot.metronomeVolume
+        project.countInEnabled = snapshot.countInEnabled
+        project.projectKey = snapshot.projectKey
         project.tracks = snapshot.tracks.map { ts in
             let t = Track(id: ts.id, name: ts.name, clips: ts.clips)
             t.volume = ts.volume; t.pan = ts.pan; t.mute = ts.mute; t.solo = ts.solo

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// Opens a clip in the v0.1 single-file editor (waveform, tempo/pitch, cut/trim/fade,
 /// undo, effects, export) via an ad-hoc `AudioDocument` loaded from the clip's audio.
@@ -73,7 +74,13 @@ struct ClipEditorSheet: View {
             Divider()
 
             if document.isLoading || document.buffer == nil {
-                ProgressView("読み込み中…").padding()
+                if let error = document.errorMessage {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .padding()
+                } else {
+                    ProgressView("読み込み中…").padding()
+                }
                 Spacer()
             } else {
                 WaveformView(engine: engine)
@@ -103,7 +110,7 @@ struct ClipEditorSheet: View {
             syncToProject = clip.syncToProject
             engine.attach(document: document)
             let url = clip.resolvedURL(packageAudioDir: project.fileURL?.appendingPathComponent("Audio"))
-            document.load(url: url)
+            loadTrimmedClipAudio(from: url)
         }
         .onChange(of: document.effects) { _, _ in engine.syncEffects() }
         .onChange(of: document.tempoPercent) { _, _ in engine.syncEffects() }
@@ -180,10 +187,50 @@ struct ClipEditorSheet: View {
         syncToProject = updated.syncToProject
     }
 
+    private func loadTrimmedClipAudio(from url: URL) {
+        document.isLoading = true
+        document.errorMessage = nil
+        let sourceStart = clip.sourceStart
+        let duration = clip.duration
+        Task { @MainActor in
+            do {
+                let trimmedURL = try await Task.detached(priority: .userInitiated) {
+                    try ClipEditorAudioRegionLoader.writeRegionCopy(
+                        from: url,
+                        sourceStart: sourceStart,
+                        duration: duration
+                    )
+                }.value
+                document.load(url: trimmedURL)
+            } catch {
+                document.isLoading = false
+                document.errorMessage = "読み込みに失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
     private func applyAndClose() {
         guard let buffer = document.buffer else { dismiss(); return }
         let cacheKey = "clip-edit-\(UUID().uuidString)"
         project.replaceClipAudio(clip, on: track, newBuffer: buffer, cacheKey: cacheKey)
         dismiss()
+    }
+}
+
+/// The editor works on the audio that is audible in the clip. Staging that region
+/// in a temporary file lets `AudioDocument` keep its normal URL-based loading flow.
+private enum ClipEditorAudioRegionLoader {
+    static func writeRegionCopy(from sourceURL: URL, sourceStart: Double, duration: Double) throws -> URL {
+        let buffer = try AudioFileRegionReader.read(url: sourceURL, sourceStart: sourceStart, duration: duration)
+        let destinationURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("remixa-clip-editor-\(UUID().uuidString).caf")
+        let audioFile = try AVAudioFile(
+            forWriting: destinationURL,
+            settings: buffer.format.settings,
+            commonFormat: buffer.format.commonFormat,
+            interleaved: buffer.format.isInterleaved
+        )
+        try audioFile.write(from: buffer)
+        return destinationURL
     }
 }

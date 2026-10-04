@@ -26,6 +26,7 @@
 		5160269E1C0A30986EBE8EAF /* ControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BD5C33C1BAB7077A6BCD0A /* ControlServer.swift */; };
 		5631DC120192D9AC29EB811B /* RemixaCLI in Resources */ = {isa = PBXBuildFile; fileRef = 22020D84CCFB026BD145F5DB /* RemixaCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5D7322F841C10AA69ACC6FC8 /* ControlMethods.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1507354ED19115E59B87B4E /* ControlMethods.swift */; };
+		67C59639CA7A2CE591121BA5 /* KeyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4DE74B30305F0AE61A3E61C /* KeyDetector.swift */; };
 		6856F1C014614AE634167121 /* TimelineExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7E629BDC82F0594971A2AA /* TimelineExportView.swift */; };
 		6D33B0D00F2035AB6B25F91D /* BPMEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */; };
 		75BA10ACD1C19953303B7A25 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8574F27DE8A51C130C335C1 /* main.swift */; };
@@ -86,6 +87,7 @@
 		94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackLaneView.swift; sourceTree = "<group>"; };
 		9D44AE9B30EA137FEF35EA96 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMEstimator.swift; sourceTree = "<group>"; };
+		A4DE74B30305F0AE61A3E61C /* KeyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyDetector.swift; sourceTree = "<group>"; };
 		A958479F13A5D595DE22C431 /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
 		AD70612A795902A7351612D0 /* EffectsRackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackSettings.swift; sourceTree = "<group>"; };
 		B1507354ED19115E59B87B4E /* ControlMethods.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlMethods.swift; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 				776C82119C39B6D31D0BDC69 /* AudioExporter.swift */,
 				47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */,
 				A3427A93F5B050CE1873BE92 /* BPMEstimator.swift */,
+				A4DE74B30305F0AE61A3E61C /* KeyDetector.swift */,
 				0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */,
 				3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */,
 				2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */,
@@ -409,6 +412,7 @@
 				E73932A3E46656B58CC49408 /* EffectsRackSettings.swift in Sources */,
 				A66F1597C290B1BC32F23D64 /* EffectsRackView.swift in Sources */,
 				B4C6BDC5402EAC5A25508E51 /* ExportView.swift in Sources */,
+				67C59639CA7A2CE591121BA5 /* KeyDetector.swift in Sources */,
 				3A8C827820CEC1D31313B878 /* Project.swift in Sources */,
 				8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */,
 				9DFF80D1FC5DD301E1571BAA /* RemixaApp.swift in Sources */,
@@ -491,7 +495,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.5.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -603,7 +607,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.0;
+				MARKETING_VERSION = 0.5.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;

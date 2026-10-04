@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 /// One horizontal lane on the timeline holding a track's clips.
 struct TrackLaneView: View {
@@ -10,7 +11,7 @@ struct TrackLaneView: View {
     let height: CGFloat
     let playhead: Double
     let onDoubleTapClip: (Clip) -> Void
-    let onDropAudio: (URL, Double) -> Void
+    let onDropAudio: @MainActor @Sendable (URL, Double) -> Void
 
     @State private var isDropTargeted = false
 
@@ -24,24 +25,28 @@ struct TrackLaneView: View {
                     track: track,
                     pixelsPerSecond: pixelsPerSecond,
                     laneHeight: height,
-                    isSelected: project.selectedClipID == clip.id,
+                    isSelected: project.selectedClipIDs.contains(clip.id),
                     onDoubleTap: { onDoubleTapClip(clip) }
                 )
                 .environmentObject(project)
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
-        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-            handleDrop(providers: providers)
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers, location in
+            handleDrop(providers: providers, at: location)
         }
     }
 
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        _ = provider.loadObject(ofClass: URL.self) { url, _ in
-            guard let url else { return }
-            Task { @MainActor in
-                onDropAudio(url, 0)
+    private func handleDrop(providers: [NSItemProvider], at location: CGPoint) -> Bool {
+        guard !providers.isEmpty else { return false }
+        let timelineStart = max(0, Double(location.x) / pixelsPerSecond)
+        let dropHandler = onDropAudio
+        for provider in providers {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in
+                    dropHandler(url, timelineStart)
+                }
             }
         }
         return true
@@ -65,7 +70,10 @@ private struct ClipView: View {
     private let handleWidth: CGFloat = 7
 
     private var clipWidth: CGFloat { max(10, CGFloat(clip.timelineDuration) * pixelsPerSecond) }
-    private var clipX: CGFloat { CGFloat(clip.timelineStart + dragOffsetSeconds) * pixelsPerSecond }
+    private var clipX: CGFloat {
+        let sharedDelta = project.selectedClipIDs.contains(clip.id) ? project.previewMoveDelta : 0
+        return CGFloat(clip.timelineStart + sharedDelta + dragOffsetSeconds) * pixelsPerSecond
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -100,19 +108,27 @@ private struct ClipView: View {
         }
         .frame(width: clipWidth, height: laneHeight - 12)
         .offset(x: clipX, y: 6)
+        .id(clip.id)
         .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture(count: 1) { project.selectedClipID = clip.id }
+        .onTapGesture(count: 1) {
+            project.selectClip(
+                clip.id,
+                command: NSEvent.modifierFlags.contains(.command),
+                shift: NSEvent.modifierFlags.contains(.shift)
+            )
+        }
         .gesture(
             DragGesture(minimumDistance: 3)
                 .onChanged { value in
                     isDraggingBody = true
-                    dragOffsetSeconds = Double(value.translation.width) / pixelsPerSecond
+                    if !project.selectedClipIDs.contains(clip.id) { project.selectClip(clip.id) }
+                    project.setPreviewMoveDelta(Double(value.translation.width) / pixelsPerSecond)
                 }
                 .onEnded { value in
-                    let newStart = clip.timelineStart + Double(value.translation.width) / pixelsPerSecond
+                    let delta = Double(value.translation.width) / pixelsPerSecond
                     dragOffsetSeconds = 0
                     isDraggingBody = false
-                    project.moveClip(clip, on: track, toTimelineStart: newStart)
+                    project.moveSelectedClips(by: delta)
                 }
         )
         .contextMenu {
@@ -125,18 +141,26 @@ private struct ClipView: View {
                 Button("後ろへ 1 拍") { project.nudgeClipContent(clip, on: track, by: 60.0 / max(project.bpm, 1)) }
             }
             Divider()
-            Button("複製") { project.duplicateClip(clip, on: track) }
+            Button("複製") {
+                if !project.selectedClipIDs.contains(clip.id) { project.selectClip(clip.id) }
+                project.duplicateSelectedClips()
+            }
             Button("パート分離…") {
                 NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clip.id])
             }
-            Button("削除", role: .destructive) { project.deleteClip(clip, on: track) }
+            Button("削除", role: .destructive) {
+                if !project.selectedClipIDs.contains(clip.id) { project.selectClip(clip.id) }
+                project.deleteSelectedClips()
+            }
         }
     }
 
     private var tempoSummary: String {
         let rate = String(format: "%.2f×", clip.tempoRate)
         let bpm = clip.sourceBPM.map { String(format: "%.0f BPM", $0) } ?? "元BPM未設定"
-        return "\(rate) · \(bpm)\(clip.syncToProject ? " · 同期" : "")"
+        let pitch = clip.pitchSemitones == 0 ? "±0半音" : "\(clip.pitchSemitones > 0 ? "+" : "")\(clip.pitchSemitones)半音"
+        let key = clip.detectedKey.map { " · \($0.name)" } ?? ""
+        return "\(rate) · \(bpm)\(clip.syncToProject ? " · 同期" : "") · \(pitch)\(key)"
     }
 
     /// Builds the waveform stroke path for the visible (trimmed) portion of the clip,

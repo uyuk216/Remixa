@@ -100,6 +100,7 @@ extension Clip {
             "sourceDuration": duration,
             "tempoRate": tempoRate,
             "syncToProject": syncToProject,
+            "pitchSemitones": pitchSemitones,
             "gain": gain,
             "fadeIn": fadeIn,
             "fadeOut": fadeOut
@@ -109,13 +110,18 @@ extension Clip {
         } else {
             json["sourceBPM"] = NSNull()
         }
+        if let detectedKey {
+            json["detectedKey"] = ["tonic": detectedKey.tonic, "mode": detectedKey.mode.rawValue, "name": detectedKey.name]
+        } else {
+            json["detectedKey"] = NSNull()
+        }
         return json
     }
 }
 
 extension Track {
     func toJSON() -> [String: Any] {
-        [
+        return [
             "id": id.uuidString,
             "name": name,
             "volume": volume,
@@ -131,7 +137,13 @@ extension Track {
 @MainActor
 extension RemixaProject {
     func toJSON(timelineEngine: TimelineEngine?) -> [String: Any] {
-        [
+        let projectKeyJSON: Any
+        if let projectKey {
+            projectKeyJSON = ["tonic": projectKey.tonic, "mode": projectKey.mode.rawValue, "name": projectKey.name]
+        } else {
+            projectKeyJSON = NSNull()
+        }
+        return [
             "name": fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト",
             "path": fileURL?.path ?? NSNull(),
             "bpm": bpm,
@@ -143,6 +155,16 @@ extension RemixaProject {
                 "start": loopRegion?.lowerBound ?? 0,
                 "end": loopRegion?.upperBound ?? 0
             ] as [String: Any],
+            "snapDivision": snapDivision.rawValue,
+            "timeSignature": timeSignature.rawValue,
+            "metronome": [
+                "playbackEnabled": playbackMetronomeEnabled,
+                "exportEnabled": exportMetronomeEnabled,
+                "volume": metronomeVolume,
+                "countIn": countInEnabled
+            ],
+            "projectKey": projectKeyJSON,
+            "markers": markers.map { ["id": $0.id.uuidString, "name": $0.name, "time": $0.time] as [String: Any] },
             "tracks": tracks.map { $0.toJSON() }
         ]
     }

@@ -61,7 +61,15 @@ final class ControlMethods {
             let project = try requireProject()
             guard let bpm = params.number("bpm") else { throw RPCError.invalidParams("bpmが必要です") }
             project.setBPM(bpm)
+            timelineEngine?.refreshPlaybackSchedule()
             return NSNull()
+        case "project.setTimelineSettings": try projectSetTimelineSettings(params); return NSNull()
+        case "project.setMetronome": try projectSetMetronome(params); return NSNull()
+        case "project.setKey": try projectSetKey(params); return NSNull()
+
+        case "marker.add": return try markerAdd(params)
+        case "marker.update": try markerUpdate(params); return NSNull()
+        case "marker.remove": try markerRemove(params); return NSNull()
 
         case "track.add": return try trackAdd(params)
         case "track.remove": try trackRemove(params); return NSNull()
@@ -71,6 +79,7 @@ final class ControlMethods {
         case "clip.add": return try clipAdd(params)
         case "clip.update": try clipUpdate(params); return NSNull()
         case "clip.syncTempo": try clipSyncTempo(params); return NSNull()
+        case "clip.detectKey": return try await clipDetectKey(params)
         case "clip.split": return try clipSplit(params)
         case "clip.duplicate": return try clipDuplicate(params)
         case "clip.remove": try clipRemove(params); return NSNull()
@@ -91,10 +100,17 @@ final class ControlMethods {
         case "transport.setLoop": try transportSetLoop(params); return NSNull()
 
         case "export.mix": return try await exportMix(params)
+        case "export.stems": return try await exportStems(params)
         case "audio.analyze": return try audioAnalyze(params)
 
-        case "undo": try requireProject().undo(); return NSNull()
-        case "redo": try requireProject().redo(); return NSNull()
+        case "undo":
+            try requireProject().undo()
+            timelineEngine?.refreshPlaybackSchedule()
+            return NSNull()
+        case "redo":
+            try requireProject().redo()
+            timelineEngine?.refreshPlaybackSchedule()
+            return NSNull()
 
         case "stems.status": return stemsStatus()
         case "stems.install": return try await stemsInstall()
@@ -136,6 +152,112 @@ final class ControlMethods {
     }
 
     // MARK: - project.*
+
+    private func projectSetTimelineSettings(_ params: [String: Any]) throws {
+        let snap: SnapDivision?
+        if let rawValue = params["snapDivision"] {
+            guard let raw = rawValue as? String else { throw RPCError.invalidParams("snapDivisionは文字列で指定してください") }
+            guard let value = SnapDivision(rawValue: raw) else { throw RPCError.invalidParams("snapDivisionが不正です") }
+            snap = value
+        } else {
+            snap = nil
+        }
+        let signature: TimeSignature?
+        if let raw = params["timeSignature"] as? String {
+            guard let value = TimeSignature(rawValue: raw) else { throw RPCError.invalidParams("timeSignatureは4/4または3/4です") }
+            signature = value
+        } else if params["timeSignature"] != nil {
+            guard let numerator = params.number("timeSignature"), numerator == 3 || numerator == 4 else {
+                throw RPCError.invalidParams("timeSignatureは4/4または3/4です")
+            }
+            signature = numerator == 3 ? .threeFour : .fourFour
+        } else {
+            signature = nil
+        }
+        try requireProject().setTimelineSettings(snapDivision: snap, timeSignature: signature)
+    }
+
+    private func projectSetMetronome(_ params: [String: Any]) throws {
+        for key in ["playbackEnabled", "exportEnabled", "countIn"] where params[key] != nil {
+            guard params[key] is Bool else { throw RPCError.invalidParams("\(key)は真偽値で指定してください") }
+        }
+        let volume: Double?
+        if params["volume"] != nil {
+            guard let value = params.number("volume"), value.isFinite, (0...1).contains(value) else {
+                throw RPCError.invalidParams("volumeは0〜1の範囲です")
+            }
+            volume = value
+        } else {
+            volume = nil
+        }
+        try requireProject().setMetronomeSettings(
+            playbackEnabled: params["playbackEnabled"] as? Bool,
+            exportEnabled: params["exportEnabled"] as? Bool,
+            volume: volume,
+            countIn: params["countIn"] as? Bool
+        )
+    }
+
+    private func projectSetKey(_ params: [String: Any]) throws {
+        guard let raw = params["key"] else { throw RPCError.invalidParams("keyが必要です。キー名かnullを指定してください") }
+        if raw is NSNull {
+            try requireProject().setProjectKey(nil)
+            return
+        }
+        guard let text = raw as? String,
+              let key = MusicalKey.all.first(where: { $0.name.caseInsensitiveCompare(text) == .orderedSame || $0.id == text }) else {
+            throw RPCError.invalidParams("keyは例: Cメジャー、Aマイナー、またはnullです")
+        }
+        try requireProject().setProjectKey(key)
+    }
+
+    private func markerAdd(_ params: [String: Any]) throws -> Any {
+        guard let time = params.number("time"), time.isFinite, time >= 0 else {
+            throw RPCError.invalidParams("timeは0以上の秒数で指定してください")
+        }
+        if params["name"] != nil, !(params["name"] is String) {
+            throw RPCError.invalidParams("nameは文字列で指定してください")
+        }
+        let marker = try requireProject().addMarker(at: time, name: params["name"] as? String)
+        return ["markerId": marker.id.uuidString]
+    }
+
+    private func markerUpdate(_ params: [String: Any]) throws {
+        guard let rawID = params["markerId"] as? String, let id = UUID(uuidString: rawID) else {
+            throw RPCError.invalidParams("有効なmarkerIdが必要です")
+        }
+        let project = try requireProject()
+        guard project.markers.contains(where: { $0.id == id }) else {
+            throw RPCError.invalidParams("マーカーが見つかりません: \(rawID)")
+        }
+        guard params["name"] != nil || params["time"] != nil else {
+            throw RPCError.invalidParams("変更するnameまたはtimeを指定してください")
+        }
+        if params["name"] != nil, !(params["name"] is String) {
+            throw RPCError.invalidParams("nameは文字列で指定してください")
+        }
+        let time: Double?
+        if params["time"] != nil {
+            guard let value = params.number("time"), value.isFinite, value >= 0 else {
+                throw RPCError.invalidParams("timeは0以上の秒数で指定してください")
+            }
+            time = value
+        } else {
+            time = nil
+        }
+        project.updateMarker(id: id, name: params["name"] as? String, time: time)
+    }
+
+    private func markerRemove(_ params: [String: Any]) throws {
+        guard let rawID = params["markerId"] as? String, let id = UUID(uuidString: rawID) else {
+            throw RPCError.invalidParams("有効なmarkerIdが必要です")
+        }
+        let project = try requireProject()
+        guard project.markers.contains(where: { $0.id == id }) else {
+            throw RPCError.invalidParams("マーカーが見つかりません: \(rawID)")
+        }
+        project.deleteMarker(id: id)
+    }
 
     private func projectOpen(_ params: [String: Any]) throws -> Any {
         guard let path = params["path"] as? String else { throw RPCError.invalidParams("pathが必要です") }
@@ -241,6 +363,30 @@ final class ControlMethods {
         let project = try requireProject()
         let (track, index) = try findClip(idString: clipId)
         let clip = track.clips[index]
+        let requestedPitch: Int?
+        if params["pitchSemitones"] != nil {
+            guard let value = params.number("pitchSemitones"), value.isFinite,
+                  value.rounded(.towardZero) == value, (-12...12).contains(value) else {
+                throw RPCError.invalidParams("pitchSemitonesは-12〜12の整数です")
+            }
+            requestedPitch = Int(value)
+        } else {
+            requestedPitch = nil
+        }
+        if params["matchProjectKey"] != nil, !(params["matchProjectKey"] is Bool) {
+            throw RPCError.invalidParams("matchProjectKeyは真偽値で指定してください")
+        }
+        let pitchForUpdate: Int?
+        if params["matchProjectKey"] as? Bool == true {
+            guard let projectKey = project.projectKey, let detectedKey = clip.detectedKey else {
+                throw RPCError.invalidParams("プロジェクトのキーと検出済みのクリップキーが必要です")
+            }
+            var shift = (projectKey.tonic - detectedKey.tonic + 12) % 12
+            if shift > 6 { shift -= 12 }
+            pitchForUpdate = shift
+        } else {
+            pitchForUpdate = requestedPitch
+        }
         let sourceBPM: Double??
         if let sourceBPMValue = params["sourceBPM"] {
             if sourceBPMValue is NSNull {
@@ -264,9 +410,26 @@ final class ControlMethods {
             syncToProject: params["syncToProject"] as? Bool,
             gain: params.number("gain"),
             fadeIn: params.number("fadeIn"),
-            fadeOut: params.number("fadeOut")
+            fadeOut: params.number("fadeOut"),
+            pitchSemitones: pitchForUpdate
         )
         timelineEngine?.refreshPlaybackSchedule()
+    }
+
+    private func clipDetectKey(_ params: [String: Any]) async throws -> Any {
+        guard let clipId = params["clipId"] as? String else { throw RPCError.invalidParams("clipIdが必要です") }
+        let project = try requireProject()
+        let (track, index) = try findClip(idString: clipId)
+        let clip = track.clips[index]
+        let url = project.sourceURL(for: clip)
+        let sourceStart = clip.sourceStart
+        let duration = clip.duration
+        let key = await Task.detached(priority: .userInitiated) {
+            KeyDetector.estimate(fileURL: url, sourceStart: sourceStart, duration: duration)
+        }.value
+        guard let key else { throw RPCError.appFailure("音源のキーを推定できませんでした") }
+        project.setDetectedKey(key, for: clip.id)
+        return ["key": key.name, "tonic": key.tonic, "mode": key.mode.rawValue]
     }
 
     private func clipSyncTempo(_ params: [String: Any]) throws {
@@ -456,23 +619,96 @@ final class ControlMethods {
                 TimelineExporter.TrackExportInfo.SourceClip(clip: $0, sourceURL: project.sourceURL(for: $0))
             }
             infos.append(TimelineExporter.TrackExportInfo(
-                clips: clips, volume: track.volume, pan: track.pan,
+                name: track.name, clips: clips, volume: track.volume, pan: track.pan,
                 audible: audible, effects: track.effects
             ))
         }
         let masterVolume = project.masterVolume
         let duration = project.projectDuration
         let destination = URL(fileURLWithPath: path)
+        let options = try exportOptions(project: project, params: params)
 
         do {
             try await TimelineExporter.export(
                 tracks: infos, masterVolume: masterVolume, totalDuration: duration,
-                format: format, destination: destination, progress: { _ in }
+                format: format, destination: destination, options: options,
+                progress: { _ in }
             )
             return ["path": path]
         } catch {
             throw RPCError.appFailure("書き出しに失敗しました: \(error.localizedDescription)")
         }
+    }
+
+    private func exportStems(_ params: [String: Any]) async throws -> Any {
+        guard let path = params["directory"] as? String,
+              let formatString = params["format"] as? String else {
+            throw RPCError.invalidParams("directory, formatが必要です")
+        }
+        let format: ExportFormat
+        switch formatString {
+        case "wav": format = .wav
+        case "m4a": format = .m4a
+        default: throw RPCError.invalidParams("formatはwavかm4aです")
+        }
+        let project = try requireProject()
+        let tracks = project.tracks.map { track in
+            TimelineExporter.TrackExportInfo(
+                name: track.name,
+                clips: track.clips.map { .init(clip: $0, sourceURL: project.sourceURL(for: $0)) },
+                volume: track.volume,
+                pan: track.pan,
+                audible: true,
+                effects: track.effects
+            )
+        }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        let options = try exportOptions(project: project, params: params)
+        do {
+            try await TimelineExporter.exportStems(
+                tracks: tracks,
+                totalDuration: project.projectDuration,
+                format: format,
+                directory: directory,
+                options: options,
+                progress: { _ in }
+            )
+            return ["directory": path]
+        } catch {
+            throw RPCError.appFailure("ステム書き出しに失敗しました: \(error.localizedDescription)")
+        }
+    }
+
+    private func exportOptions(project: RemixaProject, params: [String: Any]) throws -> TimelineExporter.ExportOptions {
+        let wavEncoding: TimelineExporter.WAVEncoding
+        if let rawValue = params["wavEncoding"] {
+            guard let raw = rawValue as? String else { throw RPCError.invalidParams("wavEncodingは文字列で指定してください") }
+            guard let encoding = TimelineExporter.WAVEncoding(rawValue: raw) else {
+                throw RPCError.invalidParams("wavEncodingはpcm24またはfloat32です")
+            }
+            wavEncoding = encoding
+        } else {
+            wavEncoding = .pcm24
+        }
+
+        let m4aQuality: TimelineExporter.M4AQuality
+        if params["m4aBitrate"] != nil {
+            guard let bitrate = params.number("m4aBitrate"), bitrate.isFinite,
+                  let quality = TimelineExporter.M4AQuality.allCases.first(where: { Double($0.rawValue) == bitrate }) else {
+                throw RPCError.invalidParams("m4aBitrateは128000、192000、256000、320000のいずれかです")
+            }
+            m4aQuality = quality
+        } else {
+            m4aQuality = .kbps256
+        }
+        return TimelineExporter.ExportOptions(
+            wavEncoding: wavEncoding,
+            m4aQuality: m4aQuality,
+            metronomeEnabled: project.exportMetronomeEnabled,
+            metronomeVolume: project.metronomeVolume,
+            bpm: project.bpm,
+            beatsPerBar: project.beatsPerBar
+        )
     }
 
     // MARK: - stems.*
