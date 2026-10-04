@@ -17,7 +17,6 @@ final class TimelineEngine: ObservableObject {
 
     private var playbackAnchorWallTime: TimeInterval = 0
     private var playbackAnchorPosition: Double = 0
-    private var didStartEngine = false
 
     private struct TrackNodes {
         let player = AVAudioPlayerNode()
@@ -76,17 +75,27 @@ final class TimelineEngine: ObservableObject {
     // MARK: - Transport
 
     func togglePlayPause() {
-        isPlaying ? pause() : play()
+        if isPlaying {
+            pause()
+        } else {
+            _ = play()
+        }
     }
 
-    func play() {
-        guard let project else { return }
-        if !didStartEngine {
+    @discardableResult
+    func play() -> Bool {
+        guard let project else { return false }
+        if !engine.isRunning {
             engine.prepare()
-            try? engine.start()
-            didStartEngine = true
+            do {
+                try engine.start()
+            } catch {
+                project.errorMessage = "再生を開始できませんでした: \(error.localizedDescription)"
+                isPlaying = false
+                stopDisplayTimer()
+                return false
+            }
         }
-        if !engine.isRunning { try? engine.start() }
         syncMixState()
 
         let startTime = currentTime
@@ -113,6 +122,7 @@ final class TimelineEngine: ObservableObject {
         playbackAnchorPosition = startTime
         isPlaying = true
         startDisplayTimer()
+        return true
     }
 
     func pause() {
@@ -132,7 +142,7 @@ final class TimelineEngine: ObservableObject {
         let wasPlaying = isPlaying
         for nodes in perTrack.values { nodes.player.stop() }
         currentTime = max(0, seconds)
-        if wasPlaying { play() }
+        if wasPlaying { _ = play() }
     }
 
     private func startDisplayTimer() {

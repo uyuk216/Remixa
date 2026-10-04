@@ -176,6 +176,7 @@ final class RemixaProject: ObservableObject {
     @Published var fileURL: URL?
     @Published var isDirty: Bool = false
     @Published var errorMessage: String?
+    @Published private(set) var mixStateRevision = 0
 
     /// Decoded audio buffers keyed by resolved absolute file path, shared across clips
     /// that reference the same source file.
@@ -188,6 +189,17 @@ final class RemixaProject: ObservableObject {
 
     private var undoStack: [ProjectSnapshot] = []
     private var redoStack: [ProjectSnapshot] = []
+    private var coalescedUndoSnapshot: ProjectSnapshot?
+    private var coalescedUndoHasChanges = false
+    private(set) var projectSessionID = UUID()
+
+    private struct ActiveStemRun {
+        let sessionID: UUID
+        let trackID: UUID
+        let clipID: UUID
+        let cancellation: StemSeparationService.CancellationToken
+    }
+    private var activeStemRuns: [UUID: ActiveStemRun] = [:]
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -227,17 +239,51 @@ final class RemixaProject: ObservableObject {
             t.effects = ts.effects.settings
             return t
         }
+        mixStateRevision &+= 1
     }
 
     /// Call before any mutating timeline operation to make it undoable.
     func pushUndo() {
-        undoStack.append(snapshot())
-        if undoStack.count > 100 { undoStack.removeFirst() }
-        redoStack.removeAll()
+        if coalescedUndoSnapshot != nil { endUndoCoalescing() }
+        appendUndoSnapshot(snapshot())
         isDirty = true
     }
 
+    private func appendUndoSnapshot(_ previous: ProjectSnapshot) {
+        undoStack.append(previous)
+        if undoStack.count > 100 { undoStack.removeFirst() }
+        redoStack.removeAll()
+    }
+
+    /// Starts one undoable UI gesture, such as a slider drag.
+    func beginUndoCoalescing() {
+        guard coalescedUndoSnapshot == nil else { return }
+        coalescedUndoSnapshot = snapshot()
+        coalescedUndoHasChanges = false
+    }
+
+    /// Commits all changes made during a coalesced UI gesture as one undo step.
+    func endUndoCoalescing() {
+        guard let previous = coalescedUndoSnapshot else { return }
+        coalescedUndoSnapshot = nil
+        if coalescedUndoHasChanges {
+            appendUndoSnapshot(previous)
+            isDirty = true
+        }
+        coalescedUndoHasChanges = false
+    }
+
+    private func registerEdit() {
+        if coalescedUndoSnapshot != nil {
+            coalescedUndoHasChanges = true
+            isDirty = true
+        } else {
+            pushUndo()
+        }
+    }
+
     func undo() {
+        if coalescedUndoSnapshot != nil { endUndoCoalescing() }
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(snapshot())
         restore(previous)
@@ -245,10 +291,70 @@ final class RemixaProject: ObservableObject {
     }
 
     func redo() {
+        if coalescedUndoSnapshot != nil { endUndoCoalescing() }
         guard let next = redoStack.popLast() else { return }
         undoStack.append(snapshot())
         restore(next)
         isDirty = true
+    }
+
+    func clearUndoHistory() {
+        undoStack.removeAll()
+        redoStack.removeAll()
+        coalescedUndoSnapshot = nil
+        coalescedUndoHasChanges = false
+    }
+
+    /// Replaces all persisted project content and starts a fresh undo session.
+    func replaceContents(with loaded: RemixaProject) {
+        cancelAllActiveStemSeparations()
+        tracks = loaded.tracks
+        bpm = loaded.bpm
+        masterVolume = loaded.masterVolume
+        loopRegion = nil
+        selectedClipID = nil
+        fileURL = loaded.fileURL
+        isDirty = false
+        errorMessage = nil
+        bufferCache = loaded.bufferCache
+        waveformCache.removeAll()
+        clearUndoHistory()
+        mixStateRevision &+= 1
+    }
+
+    func setMasterVolume(_ value: Double) {
+        guard value != masterVolume else { return }
+        registerEdit()
+        masterVolume = value
+        mixStateRevision &+= 1
+    }
+
+    /// Applies a complete track mixer update as one undoable edit.
+    func updateTrack(
+        _ track: Track,
+        name: String? = nil,
+        volume: Double? = nil,
+        pan: Double? = nil,
+        mute: Bool? = nil,
+        solo: Bool? = nil,
+        effects: EffectsRackSettings? = nil
+    ) {
+        guard tracks.contains(where: { $0.id == track.id }) else { return }
+        let changes = (name.map { $0 != track.name } ?? false)
+            || (volume.map { $0 != track.volume } ?? false)
+            || (pan.map { $0 != track.pan } ?? false)
+            || (mute.map { $0 != track.mute } ?? false)
+            || (solo.map { $0 != track.solo } ?? false)
+            || (effects.map { $0 != track.effects } ?? false)
+        guard changes else { return }
+        registerEdit()
+        if let name { track.name = name }
+        if let volume { track.volume = volume }
+        if let pan { track.pan = pan }
+        if let mute { track.mute = mute }
+        if let solo { track.solo = solo }
+        if let effects { track.effects = effects }
+        mixStateRevision &+= 1
     }
 
     // MARK: - Track operations
@@ -288,6 +394,7 @@ final class RemixaProject: ObservableObject {
     }
 
     func deleteTrack(_ track: Track) {
+        cancelActiveStemSeparations(forTrackID: track.id)
         pushUndo()
         tracks.removeAll { $0.id == track.id }
     }
@@ -313,6 +420,7 @@ final class RemixaProject: ObservableObject {
 
     func moveClip(_ clip: Clip, on track: Track, toTimelineStart newStart: Double, recordUndo: Bool = true) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
         if recordUndo { pushUndo() }
         var updated = track.clips[index]
         updated.timelineStart = max(0, snapped(newStart))
@@ -322,11 +430,57 @@ final class RemixaProject: ObservableObject {
 
     func trimClip(_ clip: Clip, on track: Track, newStart: Double, newDuration: Double, newSourceStart: Double) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
         var updated = track.clips[index]
         updated.timelineStart = max(0, newStart)
-        updated.duration = max(0.02, newDuration)
-        updated.sourceStart = max(0, newSourceStart)
+        if let source = buffer(for: updated) {
+            let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+            let minimumDuration = min(0.02, sourceDuration)
+            let latestStart = max(0, sourceDuration - minimumDuration)
+            updated.sourceStart = min(max(0, newSourceStart), latestStart)
+            let availableDuration = max(minimumDuration, sourceDuration - updated.sourceStart)
+            updated.duration = min(max(minimumDuration, newDuration), availableDuration)
+        } else {
+            updated.duration = max(0.02, newDuration)
+            updated.sourceStart = max(0, newSourceStart)
+        }
+        track.clips[index] = updated
+        objectWillChange.send()
+    }
+
+    func updateClip(
+        _ clip: Clip,
+        on track: Track,
+        timelineStart: Double? = nil,
+        sourceStart: Double? = nil,
+        duration: Double? = nil,
+        gain: Double? = nil,
+        fadeIn: Double? = nil,
+        fadeOut: Double? = nil
+    ) {
+        guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        var updated = track.clips[index]
+        if let timelineStart { updated.timelineStart = max(0, timelineStart) }
+        if sourceStart != nil || duration != nil {
+            if let source = buffer(for: updated) {
+                let sourceDuration = Double(source.frameLength) / source.format.sampleRate
+                let minimumDuration = min(0.02, sourceDuration)
+                let latestStart = max(0, sourceDuration - minimumDuration)
+                updated.sourceStart = min(max(0, sourceStart ?? updated.sourceStart), latestStart)
+                let availableDuration = max(minimumDuration, sourceDuration - updated.sourceStart)
+                updated.duration = min(max(minimumDuration, duration ?? updated.duration), availableDuration)
+            } else {
+                if let sourceStart { updated.sourceStart = max(0, sourceStart) }
+                if let duration { updated.duration = max(0.02, duration) }
+            }
+        }
+        if let gain { updated.gain = gain }
+        if let fadeIn { updated.fadeIn = fadeIn }
+        if let fadeOut { updated.fadeOut = fadeOut }
+        guard updated != track.clips[index] else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
+        pushUndo()
         track.clips[index] = updated
         objectWillChange.send()
     }
@@ -334,6 +488,7 @@ final class RemixaProject: ObservableObject {
     func splitClip(_ clip: Clip, on track: Track, at playhead: Double) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }),
               playhead > clip.timelineStart, playhead < clip.timelineEnd else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
         let offset = playhead - clip.timelineStart
         var first = clip
@@ -358,6 +513,7 @@ final class RemixaProject: ObservableObject {
     }
 
     func deleteClip(_ clip: Clip, on track: Track) {
+        cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
         track.clips.removeAll { $0.id == clip.id }
         if selectedClipID == clip.id { selectedClipID = nil }
@@ -366,6 +522,7 @@ final class RemixaProject: ObservableObject {
     /// Replaces a clip's audio wholesale (used when the v0.1 clip editor commits an edit).
     func replaceClipAudio(_ clip: Clip, on track: Track, newBuffer: AVAudioPCMBuffer, cacheKey: String) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
+        cancelActiveStemSeparations(forClipID: clip.id)
         pushUndo()
         bufferCache[cacheKey] = newBuffer
         var updated = track.clips[index]
@@ -430,6 +587,20 @@ final class RemixaProject: ObservableObject {
         guard let (track, clip) = findClip(clipId) else {
             throw NSError(domain: "Remixa", code: 40, userInfo: [NSLocalizedDescriptionKey: "クリップが見つかりません"])
         }
+        let sessionID = projectSessionID
+        let runID = UUID()
+        let cancellation = StemSeparationService.CancellationToken()
+        activeStemRuns[runID] = ActiveStemRun(sessionID: sessionID, trackID: track.id, clipID: clip.id, cancellation: cancellation)
+        var outputDirForCleanup: URL?
+        var keepOutput = false
+        defer {
+            activeStemRuns.removeValue(forKey: runID)
+            if !keepOutput, let outputDirForCleanup {
+                bufferCache = bufferCache.filter { !$0.key.hasPrefix(outputDirForCleanup.path + "/") }
+                try? FileManager.default.removeItem(at: outputDirForCleanup)
+            }
+        }
+
         guard let sourceBuffer = try? loadBuffer(for: clip.resolvedURL(packageAudioDir: fileURL?.appendingPathComponent("Audio"))) else {
             throw NSError(domain: "Remixa", code: 41, userInfo: [NSLocalizedDescriptionKey: "音声を読み込めませんでした"])
         }
@@ -437,23 +608,32 @@ final class RemixaProject: ObservableObject {
         // Render just the clip's trimmed region to a temp wav for Demucs to consume.
         let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("remixa-stem-src-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
         let regionURL = tmpDir.appendingPathComponent("region.wav")
         try Self.writeRegion(of: sourceBuffer, sourceStart: clip.sourceStart, duration: clip.duration, to: regionURL)
 
-        let outputDir: URL
-        if let fileURL {
-            outputDir = fileURL.appendingPathComponent("Audio", isDirectory: true).appendingPathComponent("stems-\(clip.id.uuidString)", isDirectory: true)
-        } else {
-            outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Remixa", isDirectory: true)
-                .appendingPathComponent("stems-output", isDirectory: true)
-                .appendingPathComponent(clip.id.uuidString, isDirectory: true)
+        let outputDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Remixa", isDirectory: true)
+            .appendingPathComponent("stems-output", isDirectory: true)
+            .appendingPathComponent(runID.uuidString, isDirectory: true)
+        outputDirForCleanup = outputDir
+
+        let stems = try await StemSeparationService.shared.separate(
+            audioURL: regionURL,
+            outputDir: outputDir,
+            cancellation: cancellation,
+            progress: progress
+        )
+        try Task.checkCancellation()
+        guard activeStemRuns[runID]?.sessionID == sessionID,
+              sessionID == projectSessionID,
+              let currentTrack = tracks.first(where: { $0.id == track.id }),
+              let currentClip = currentTrack.clips.first(where: { $0.id == clip.id }),
+              currentClip == clip else {
+            throw StemSeparationService.StemError.cancelled
         }
 
-        let stems = try await StemSeparationService.shared.separate(audioURL: regionURL, outputDir: outputDir, progress: progress)
-        try? FileManager.default.removeItem(at: tmpDir)
-
-        pushUndo()
+        var preparedTracks: [Track] = []
         var newTrackIDs: [UUID] = []
         for stem in stems {
             guard let stemBuffer = try? loadBuffer(for: stem.url) else { continue }
@@ -461,12 +641,32 @@ final class RemixaProject: ObservableObject {
             let newTrack = Track(name: Self.japaneseStemName(for: stem.name))
             let newClip = Clip(name: newTrack.name, audioURL: stem.url, timelineStart: clip.timelineStart, sourceStart: 0, duration: duration)
             newTrack.clips.append(newClip)
-            tracks.append(newTrack)
+            preparedTracks.append(newTrack)
             newTrackIDs.append(newTrack.id)
         }
-        track.mute = true
+        guard !preparedTracks.isEmpty else {
+            throw NSError(domain: "Remixa", code: 43, userInfo: [NSLocalizedDescriptionKey: "パート分離の音声を読み込めませんでした"])
+        }
+        pushUndo()
+        tracks.append(contentsOf: preparedTracks)
+        currentTrack.mute = true
         objectWillChange.send()
+        keepOutput = true
         return newTrackIDs
+    }
+
+    private func cancelActiveStemSeparations(forClipID clipID: UUID? = nil, forTrackID trackID: UUID? = nil) {
+        for run in activeStemRuns.values where (clipID == nil || run.clipID == clipID) && (trackID == nil || run.trackID == trackID) {
+            run.cancellation.cancel()
+        }
+    }
+
+    private func cancelAllActiveStemSeparations() {
+        projectSessionID = UUID()
+        for run in activeStemRuns.values {
+            run.cancellation.cancel()
+        }
+        activeStemRuns.removeAll()
     }
 
     private func findClip(_ id: UUID) -> (Track, Clip)? {
@@ -519,14 +719,17 @@ final class RemixaProject: ObservableObject {
     }
 
     func resetForNewProject() {
+        cancelAllActiveStemSeparations()
         tracks = [Track(name: "トラック 1")]
         bpm = 120
         masterVolume = 1.0
         loopRegion = nil
+        selectedClipID = nil
         fileURL = nil
         isDirty = false
         bufferCache.removeAll()
-        undoStack.removeAll()
-        redoStack.removeAll()
+        waveformCache.removeAll()
+        errorMessage = nil
+        clearUndoHistory()
     }
 }

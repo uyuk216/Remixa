@@ -47,6 +47,7 @@ enum TimelineExporter {
         let maxFrames: AVAudioFrameCount = 4096
         try engine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: maxFrames)
         try engine.start()
+        defer { engine.stop() }
 
         for (index, track) in tracks.enumerated() {
             let player = playerNodes[index]
@@ -63,21 +64,45 @@ enum TimelineExporter {
 
         let outputFile = try makeOutputFile(destination: destination, format: format, sourceFormat: renderFormat)
         let outputBuffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
-        let totalFramesToRender = Int64((totalDuration + 0.5) * renderFormat.sampleRate)
+        let sourceFrames = Int64(totalDuration * renderFormat.sampleRate)
+        let maximumTailFrames = Int64(30 * renderFormat.sampleRate)
+        let maximumFramesToRender = sourceFrames + maximumTailFrames
+        let minimumTailFrames = Int64(0.5 * renderFormat.sampleRate)
+        let quietFramesRequired = Int64(0.5 * renderFormat.sampleRate)
+        let silenceThreshold: Float = 0.00025
         var renderedFrames: Int64 = 0
+        var quietTailFrames: Int64 = 0
 
-        while renderedFrames < totalFramesToRender {
-            let framesToRender = min(maxFrames, engine.manualRenderingMaximumFrameCount)
+        while renderedFrames < maximumFramesToRender {
+            let remaining = AVAudioFrameCount(maximumFramesToRender - renderedFrames)
+            let framesToRender = min(maxFrames, min(engine.manualRenderingMaximumFrameCount, remaining))
             let status = try engine.renderOffline(framesToRender, to: outputBuffer)
+            var shouldStopRendering = false
             switch status {
             case .success:
                 try outputFile.write(from: outputBuffer)
+                let previousFrameCount = renderedFrames
                 renderedFrames += Int64(outputBuffer.frameLength)
-                progress(min(Double(renderedFrames) / Double(totalFramesToRender), 0.999))
+                if renderedFrames <= sourceFrames {
+                    progress(min(Double(renderedFrames) / Double(max(sourceFrames, 1)) * 0.9, 0.9))
+                } else {
+                    progress(min(0.99, 0.9 + 0.09 * Double(renderedFrames - sourceFrames) / Double(max(maximumTailFrames, 1))))
+                }
+
+                if renderedFrames > sourceFrames {
+                    let tailFramesInBlock = renderedFrames - max(previousFrameCount, sourceFrames)
+                    if Self.rms(of: outputBuffer) < silenceThreshold {
+                        quietTailFrames += tailFramesInBlock
+                    } else {
+                        quietTailFrames = 0
+                    }
+                    if renderedFrames >= sourceFrames + minimumTailFrames,
+                       quietTailFrames >= quietFramesRequired {
+                        shouldStopRendering = true
+                    }
+                }
             case .insufficientDataFromInputNode:
-                progress(1.0)
-                engine.stop()
-                return
+                shouldStopRendering = true
             case .cannotDoInCurrentContext:
                 continue
             case .error:
@@ -85,9 +110,23 @@ enum TimelineExporter {
             @unknown default:
                 throw NSError(domain: "Remixa", code: 32, userInfo: [NSLocalizedDescriptionKey: "不明なレンダリング状態です"])
             }
+            if shouldStopRendering || renderedFrames >= maximumFramesToRender { break }
         }
         progress(1.0)
-        engine.stop()
+    }
+
+    private static func rms(of buffer: AVAudioPCMBuffer) -> Float {
+        guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { return .infinity }
+        let frameCount = Int(buffer.frameLength)
+        var squareSum: Double = 0
+        for channel in 0..<Int(buffer.format.channelCount) {
+            for frame in 0..<frameCount {
+                let sample = Double(channels[channel][frame])
+                squareSum += sample * sample
+            }
+        }
+        let sampleCount = Double(frameCount * Int(buffer.format.channelCount))
+        return Float(sqrt(squareSum / sampleCount))
     }
 
     private static func makeOutputFile(destination: URL, format: ExportFormat, sourceFormat: AVAudioFormat) throws -> AVAudioFile {

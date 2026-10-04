@@ -5,6 +5,7 @@ import SwiftUI
 /// popover (bound to `Track.effects`), so the two feature sets share one UI/engine.
 struct EffectsRackView: View {
     @Binding var effects: EffectsRackSettings
+    var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
@@ -61,7 +62,7 @@ struct EffectsRackView: View {
     private func sliderRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
         HStack {
             Text(label).frame(width: 90, alignment: .leading)
-            Slider(value: value, in: range)
+            Slider(value: value, in: range, onEditingChanged: onEditingChanged)
             Text("\(Int(value.wrappedValue))\(unit)")
                 .frame(width: 60, alignment: .trailing)
                 .foregroundStyle(.secondary)

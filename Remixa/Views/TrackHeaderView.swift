@@ -39,10 +39,16 @@ struct TrackHeaderView: View {
             }
 
             HStack(spacing: 6) {
-                Toggle("M", isOn: $track.mute)
+                Toggle("M", isOn: Binding(
+                    get: { track.mute },
+                    set: { project.updateTrack(track, mute: $0) }
+                ))
                     .toggleStyle(.button)
                     .tint(.red)
-                Toggle("S", isOn: $track.solo)
+                Toggle("S", isOn: Binding(
+                    get: { track.solo },
+                    set: { project.updateTrack(track, solo: $0) }
+                ))
                     .toggleStyle(.button)
                     .tint(.yellow)
                 Button {
@@ -51,7 +57,7 @@ struct TrackHeaderView: View {
                     Image(systemName: "slider.horizontal.3")
                 }
                 .popover(isPresented: $showEffects) {
-                    TrackEffectsPopover(track: track)
+                    TrackEffectsPopover(track: track, project: project)
                         .frame(width: 320, height: 420)
                 }
             }
@@ -60,11 +66,23 @@ struct TrackHeaderView: View {
             HStack(spacing: 4) {
                 Image(systemName: "speaker.wave.2")
                     .font(.caption2)
-                Slider(value: $track.volume, in: 0...1.5)
+                Slider(
+                    value: Binding(get: { track.volume }, set: { project.updateTrack(track, volume: $0) }),
+                    in: 0...1.5,
+                    onEditingChanged: { editing in
+                        if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
+                    }
+                )
             }
             HStack(spacing: 4) {
                 Text("L").font(.caption2)
-                Slider(value: $track.pan, in: -1...1)
+                Slider(
+                    value: Binding(get: { track.pan }, set: { project.updateTrack(track, pan: $0) }),
+                    in: -1...1,
+                    onEditingChanged: { editing in
+                        if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
+                    }
+                )
                 Text("R").font(.caption2)
             }
         }
@@ -76,14 +94,17 @@ struct TrackHeaderView: View {
 /// `EffectsRackSettings` instead of the single-clip `AudioDocument`'s.
 private struct TrackEffectsPopover: View {
     @ObservedObject var track: Track
+    let project: RemixaProject
 
     var body: some View {
         VStack(alignment: .leading) {
             Text("\(track.name) のエフェクト").font(.headline).padding(.bottom, 4)
             EffectsRackView(effects: Binding(
                 get: { track.effects },
-                set: { track.effects = $0 }
-            ))
+                set: { project.updateTrack(track, effects: $0) }
+            ), onEditingChanged: { editing in
+                if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
+            })
         }
         .padding()
     }

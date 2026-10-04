@@ -41,7 +41,7 @@ struct ContentView: View {
             timelineEngine.attach(project: project)
         }
         .onChange(of: project.tracks.count) { _, _ in timelineEngine.rebuildGraph() }
-        .onChange(of: project.masterVolume) { _, _ in timelineEngine.syncMixState() }
+        .onChange(of: project.mixStateRevision) { _, _ in timelineEngine.syncMixState() }
         .onReceive(NotificationCenter.default.publisher(for: .remixaAddAudioTrack)) { _ in
             addAudioTrack()
         }
@@ -62,6 +62,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .remixaOpenProject)) { _ in
             openProjectPanel()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .remixaNewProject)) { _ in
+            newProjectFromUI()
         }
         .sheet(isPresented: $showExportSheet) {
             TimelineExportView(project: project)
@@ -112,7 +115,13 @@ struct ContentView: View {
             if showVolume {
                 HStack(spacing: 4) {
                     Image(systemName: "speaker.wave.3")
-                    Slider(value: $project.masterVolume, in: 0...1.5)
+                    Slider(
+                        value: Binding(get: { project.masterVolume }, set: { project.setMasterVolume($0) }),
+                        in: 0...1.5,
+                        onEditingChanged: { editing in
+                            if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
+                        }
+                    )
                         .frame(width: 100)
                 }
             }
@@ -167,32 +176,57 @@ struct ContentView: View {
     private func openProject(at url: URL) {
         do {
             let loaded = try ProjectDocumentIO.load(from: url)
-            project.tracks = loaded.tracks
-            project.bpm = loaded.bpm
-            project.masterVolume = loaded.masterVolume
-            project.fileURL = loaded.fileURL
-            project.isDirty = false
-            project.bufferCache = loaded.bufferCache
+            guard confirmUnsavedChangesBeforeSwitch() else { return }
+            project.replaceContents(with: loaded)
             timelineEngine.rebuildGraph()
         } catch {
             project.errorMessage = "プロジェクトを開けませんでした: \(error.localizedDescription)"
         }
     }
 
-    private func saveProject(saveAs: Bool) {
+    private func newProjectFromUI() {
+        guard confirmUnsavedChangesBeforeSwitch() else { return }
+        project.resetForNewProject()
+        timelineEngine.rebuildGraph()
+    }
+
+    private func confirmUnsavedChangesBeforeSwitch() -> Bool {
+        guard project.isDirty else { return true }
+        let alert = NSAlert()
+        alert.messageText = "保存していない変更があります"
+        alert.informativeText = "プロジェクトを切り替える前に変更を保存しますか？"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "保存しない")
+        alert.addButton(withTitle: "キャンセル")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return saveProject(saveAs: false)
+        case .alertSecondButtonReturn:
+            return true
+        default:
+            return false
+        }
+    }
+
+    @discardableResult
+    private func saveProject(saveAs: Bool) -> Bool {
         var destination = project.fileURL
         if saveAs || destination == nil {
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.remixaProject]
             panel.nameFieldStringValue = project.fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト"
-            guard panel.runModal() == .OK, let url = panel.url else { return }
+            guard panel.runModal() == .OK, let url = panel.url else { return false }
             destination = url
         }
-        guard let destination else { return }
+        guard let destination else { return false }
         do {
             try ProjectDocumentIO.save(project, to: destination)
+            project.errorMessage = nil
+            return true
         } catch {
             project.errorMessage = "保存に失敗しました: \(error.localizedDescription)"
+            return false
         }
     }
 }

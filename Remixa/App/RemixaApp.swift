@@ -94,6 +94,10 @@ struct RemixaApp: App {
                     .keyboardShortcut("z", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .newItem) {
+                Button("新規プロジェクト") {
+                    NotificationCenter.default.post(name: .remixaNewProject, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command])
                 Button("音声ファイルを追加…") {
                     NotificationCenter.default.post(name: .remixaAddAudioTrack, object: nil)
                 }
@@ -176,6 +180,7 @@ extension Notification.Name {
     static let remixaOpenDocument = Notification.Name("remixaOpenDocument")
     static let remixaAddAudioTrack = Notification.Name("remixaAddAudioTrack")
     static let remixaOpenProject = Notification.Name("remixaOpenProject")
+    static let remixaNewProject = Notification.Name("remixaNewProject")
     static let remixaSaveProject = Notification.Name("remixaSaveProject")
     static let remixaSaveProjectAs = Notification.Name("remixaSaveProjectAs")
     static let remixaSeparateStems = Notification.Name("remixaSeparateStems")

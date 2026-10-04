@@ -16,9 +16,6 @@ extension UTType {
 ///   MyMix.remixa/
 ///     project.json   — ProjectSnapshot (bpm, tracks, clips, effects, mix state)
 ///     Audio/          — copies of every source file referenced by a clip
-///
-/// A plain-directory package (not `FileWrapper`-atomic) is used to keep this simple
-/// for v0.2; see README for the tradeoff.
 enum ProjectDocumentIO {
     private static let projectFileName = "project.json"
     private static let audioDirName = "Audio"
@@ -26,57 +23,88 @@ enum ProjectDocumentIO {
     @MainActor
     static func save(_ project: RemixaProject, to url: URL) throws {
         let fm = FileManager.default
-        if !fm.fileExists(atPath: url.path) {
-            try fm.createDirectory(at: url, withIntermediateDirectories: true)
-        }
-        let audioDir = url.appendingPathComponent(audioDirName)
-        if !fm.fileExists(atPath: audioDir.path) {
-            try fm.createDirectory(at: audioDir, withIntermediateDirectories: true)
+        let parentURL = url.deletingLastPathComponent()
+        try fm.createDirectory(at: parentURL, withIntermediateDirectories: true)
+
+        let stagingURL = parentURL.appendingPathComponent(".\(url.lastPathComponent).staging-\(UUID().uuidString)", isDirectory: true)
+        let backupURL = parentURL.appendingPathComponent(".\(url.lastPathComponent).backup-\(UUID().uuidString)", isDirectory: true)
+        var backupContainsOldPackage = false
+        var installed = false
+        defer {
+            try? fm.removeItem(at: stagingURL)
+            if !installed, backupContainsOldPackage, !fm.fileExists(atPath: url.path) {
+                try? fm.moveItem(at: backupURL, to: url)
+            }
         }
 
-        var pathForAbsoluteSource: [String: String] = [:] // absolute path -> relative audio filename
-        var usedNames = Set<String>()
+        let stagingAudioDir = stagingURL.appendingPathComponent(audioDirName, isDirectory: true)
+        try fm.createDirectory(at: stagingAudioDir, withIntermediateDirectories: true)
 
-        func relativeName(for absolutePath: String) throws -> String {
-            if let existing = pathForAbsoluteSource[absolutePath] { return existing }
-            let source = URL(fileURLWithPath: absolutePath)
-            var candidate = source.lastPathComponent
+        var relativeNameForSource: [String: String] = [:]
+        var usedNameKeys = Set<String>()
+        var updatedClipsByTrackID: [UUID: [Clip]] = [:]
+        var sourcePathsByName: [String: String] = [:]
+
+        func sourceURL(for clip: Clip) throws -> URL {
+            let source: URL
+            if clip.isRelative {
+                guard let projectURL = project.fileURL else {
+                    throw NSError(domain: "Remixa", code: 21, userInfo: [NSLocalizedDescriptionKey: "音声ファイルの保存元を特定できません"])
+                }
+                source = projectURL.appendingPathComponent(audioDirName, isDirectory: true)
+                    .appendingPathComponent(clip.audioPath)
+            } else {
+                source = URL(fileURLWithPath: clip.audioPath)
+            }
+            let normalized = source.standardizedFileURL
+            guard fm.fileExists(atPath: normalized.path) else {
+                throw NSError(domain: "Remixa", code: 22, userInfo: [NSLocalizedDescriptionKey: "音声ファイルが見つかりません: \(source.lastPathComponent)"])
+            }
+            return normalized
+        }
+
+        func collisionKey(for name: String) -> String {
+            name.precomposedStringWithCanonicalMapping
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        }
+
+        func relativeName(for source: URL) throws -> String {
+            if let existing = relativeNameForSource[source.path] { return existing }
+
+            let originalName = source.lastPathComponent
+            let sourceStem = source.deletingPathExtension().lastPathComponent
+            let fileExtension = source.pathExtension
+            var candidate = originalName
             var suffix = 1
-            while usedNames.contains(candidate) {
-                candidate = source.deletingPathExtension().lastPathComponent + "_\(suffix)." + source.pathExtension
+            while usedNameKeys.contains(collisionKey(for: candidate)) || fm.fileExists(atPath: stagingAudioDir.appendingPathComponent(candidate).path) {
+                let stemWithSuffix = "\(sourceStem)_\(suffix)"
+                candidate = fileExtension.isEmpty ? stemWithSuffix : "\(stemWithSuffix).\(fileExtension)"
                 suffix += 1
             }
-            usedNames.insert(candidate)
-            let destination = audioDir.appendingPathComponent(candidate)
-            if !fm.fileExists(atPath: destination.path) {
-                try? fm.removeItem(at: destination)
-                try fm.copyItem(at: source, to: destination)
-            }
-            pathForAbsoluteSource[absolutePath] = candidate
+
+            try fm.copyItem(at: source, to: stagingAudioDir.appendingPathComponent(candidate))
+            relativeNameForSource[source.path] = candidate
+            usedNameKeys.insert(collisionKey(for: candidate))
+            sourcePathsByName[candidate] = source.path
             return candidate
         }
 
         var snapshotTracks: [ProjectSnapshot.TrackSnapshot] = []
         for track in project.tracks {
-            var newClips: [Clip] = []
+            var updatedClips: [Clip] = []
+            updatedClips.reserveCapacity(track.clips.count)
             for clip in track.clips {
+                let source = try sourceURL(for: clip)
+                let name = try relativeName(for: source)
                 var updated = clip
-                if !clip.isRelative {
-                    let name = try relativeName(for: clip.audioPath)
-                    updated.audioPath = name
-                    updated.isRelative = true
-                    // Re-key the in-memory buffer cache to the new relative name so
-                    // playback keeps working without a reload.
-                    if let buffer = project.bufferCache[clip.audioPath] {
-                        project.bufferCache[audioDir.appendingPathComponent(name).path] = buffer
-                    }
-                }
-                newClips.append(updated)
+                updated.audioPath = name
+                updated.isRelative = true
+                updatedClips.append(updated)
             }
-            track.clips = newClips
+            updatedClipsByTrackID[track.id] = updatedClips
             snapshotTracks.append(
                 ProjectSnapshot.TrackSnapshot(
-                    id: track.id, name: track.name, clips: newClips,
+                    id: track.id, name: track.name, clips: updatedClips,
                     volume: track.volume, pan: track.pan, mute: track.mute, solo: track.solo,
                     effects: EffectsRackSettingsCodable(settings: track.effects)
                 )
@@ -85,8 +113,42 @@ enum ProjectDocumentIO {
 
         let snapshot = ProjectSnapshot(bpm: project.bpm, masterVolume: project.masterVolume, tracks: snapshotTracks)
         let data = try JSONEncoder().encode(snapshot)
-        try data.write(to: url.appendingPathComponent(projectFileName), options: .atomic)
+        try data.write(to: stagingURL.appendingPathComponent(projectFileName), options: .atomic)
 
+        if fm.fileExists(atPath: url.path) {
+            try fm.moveItem(at: url, to: backupURL)
+            backupContainsOldPackage = true
+        }
+        do {
+            try fm.moveItem(at: stagingURL, to: url)
+            installed = true
+        } catch {
+            if backupContainsOldPackage {
+                do {
+                    try fm.moveItem(at: backupURL, to: url)
+                    backupContainsOldPackage = false
+                } catch {
+                    throw NSError(domain: "Remixa", code: 23, userInfo: [
+                        NSLocalizedDescriptionKey: "新しいプロジェクトを配置できず、元のプロジェクトも復元できませんでした: \(error.localizedDescription)"
+                    ])
+                }
+            }
+            throw error
+        }
+
+        if backupContainsOldPackage {
+            try? fm.removeItem(at: backupURL)
+            backupContainsOldPackage = false
+        }
+
+        for track in project.tracks {
+            track.clips = updatedClipsByTrackID[track.id] ?? track.clips
+        }
+        for (name, sourcePath) in sourcePathsByName {
+            if let buffer = project.bufferCache[sourcePath] {
+                project.bufferCache[url.appendingPathComponent(audioDirName).appendingPathComponent(name).path] = buffer
+            }
+        }
         project.fileURL = url
         project.isDirty = false
         NSDocumentController.shared.noteNewRecentDocumentURL(url)

@@ -5,6 +5,7 @@ import Foundation
 /// asynchronously via `send(_:)`. All socket I/O happens on `queue` (a background
 /// serial queue owned by `ControlServer`), never on the main actor.
 final class ControlConnection: @unchecked Sendable {
+    private static let maximumRequestBytes = 1_048_576
     let fd: Int32
     private let queue: DispatchQueue
     private var source: DispatchSourceRead?
@@ -45,12 +46,19 @@ final class ControlConnection: @unchecked Sendable {
         }
         buffer.append(contentsOf: chunk[0..<n])
         while let newlineIndex = buffer.firstIndex(of: 0x0A) {
+            guard buffer.distance(from: buffer.startIndex, to: newlineIndex) <= Self.maximumRequestBytes else {
+                teardown()
+                return
+            }
             let lineData = buffer.subdata(in: buffer.startIndex..<newlineIndex)
             buffer.removeSubrange(buffer.startIndex...newlineIndex)
             guard let line = String(data: lineData, encoding: .utf8) else { continue }
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             onLine?(trimmed)
+        }
+        if buffer.count > Self.maximumRequestBytes {
+            teardown()
         }
     }
 

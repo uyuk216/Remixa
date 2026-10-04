@@ -79,7 +79,9 @@ final class ControlMethods {
         case "transport.play":
             let engine = try requireEngine()
             if let from = params.number("from") { engine.seek(to: from) }
-            engine.play()
+            guard engine.play() else {
+                throw RPCError.appFailure(project?.errorMessage ?? "再生を開始できませんでした")
+            }
             return NSNull()
         case "transport.stop": try requireEngine().stop(); return NSNull()
         case "transport.seek":
@@ -140,12 +142,7 @@ final class ControlMethods {
         let project = try requireProject()
         do {
             let loaded = try ProjectDocumentIO.load(from: URL(fileURLWithPath: path))
-            project.tracks = loaded.tracks
-            project.bpm = loaded.bpm
-            project.masterVolume = loaded.masterVolume
-            project.fileURL = loaded.fileURL
-            project.isDirty = false
-            project.bufferCache = loaded.bufferCache
+            project.replaceContents(with: loaded)
             timelineEngine?.rebuildGraph()
             return NSNull()
         } catch {
@@ -204,12 +201,14 @@ final class ControlMethods {
         guard let trackId = params["trackId"] as? String else { throw RPCError.invalidParams("trackIdが必要です") }
         let project = try requireProject()
         let track = try track(withID: trackId)
-        project.pushUndo()
-        if let name = params["name"] as? String { track.name = name }
-        if let volume = params.number("volume") { track.volume = volume }
-        if let pan = params.number("pan") { track.pan = pan }
-        if let mute = params["mute"] as? Bool { track.mute = mute }
-        if let solo = params["solo"] as? Bool { track.solo = solo }
+        project.updateTrack(
+            track,
+            name: params["name"] as? String,
+            volume: params.number("volume"),
+            pan: params.number("pan"),
+            mute: params["mute"] as? Bool,
+            solo: params["solo"] as? Bool
+        )
         timelineEngine?.syncMixState()
     }
 
@@ -219,8 +218,7 @@ final class ControlMethods {
         }
         let project = try requireProject()
         let track = try track(withID: trackId)
-        project.pushUndo()
-        track.effects = EffectsJSON.merge(effectsDict, into: track.effects)
+        project.updateTrack(track, effects: EffectsJSON.merge(effectsDict, into: track.effects))
         timelineEngine?.syncMixState()
     }
 
@@ -242,16 +240,17 @@ final class ControlMethods {
         guard let clipId = params["clipId"] as? String else { throw RPCError.invalidParams("clipIdが必要です") }
         let project = try requireProject()
         let (track, index) = try findClip(idString: clipId)
-        project.pushUndo()
-        var clip = track.clips[index]
-        if let v = params.number("start") { clip.timelineStart = max(0, v) }
-        if let v = params.number("sourceStart") { clip.sourceStart = max(0, v) }
-        if let v = params.number("duration") { clip.duration = max(0.02, v) }
-        if let v = params.number("gain") { clip.gain = v }
-        if let v = params.number("fadeIn") { clip.fadeIn = v }
-        if let v = params.number("fadeOut") { clip.fadeOut = v }
-        track.clips[index] = clip
-        project.objectWillChange.send()
+        let clip = track.clips[index]
+        project.updateClip(
+            clip,
+            on: track,
+            timelineStart: params.number("start"),
+            sourceStart: params.number("sourceStart"),
+            duration: params.number("duration"),
+            gain: params.number("gain"),
+            fadeIn: params.number("fadeIn"),
+            fadeOut: params.number("fadeOut")
+        )
     }
 
     private func clipSplit(_ params: [String: Any]) throws -> Any {

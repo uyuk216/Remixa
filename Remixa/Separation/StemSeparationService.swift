@@ -12,7 +12,7 @@ final class StemSeparationService: @unchecked Sendable {
         let url: URL
     }
 
-    enum StemError: LocalizedError {
+    enum StemError: LocalizedError, Equatable {
         case environmentNotReady
         case cancelled
         case processFailed(String)
@@ -26,8 +26,39 @@ final class StemSeparationService: @unchecked Sendable {
         }
     }
 
-    private final class RunningProcess: @unchecked Sendable {
-        var process: Process?
+    final class CancellationToken: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cancelled = false
+        private var process: Process?
+
+        var isCancelled: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return cancelled
+        }
+
+        func cancel() {
+            lock.lock()
+            cancelled = true
+            let activeProcess = process
+            lock.unlock()
+            if activeProcess?.isRunning == true { activeProcess?.terminate() }
+        }
+
+        /// Returns true when cancellation happened before the process was registered.
+        func register(_ process: Process) -> Bool {
+            lock.lock()
+            self.process = process
+            let wasCancelled = cancelled
+            lock.unlock()
+            return wasCancelled
+        }
+
+        func clear(_ process: Process) {
+            lock.lock()
+            if self.process === process { self.process = nil }
+            lock.unlock()
+        }
     }
 
     private final class DataBox: @unchecked Sendable {
@@ -42,8 +73,11 @@ final class StemSeparationService: @unchecked Sendable {
         model: String = "htdemucs",
         twoStems: String? = nil,
         outputDir: URL? = nil,
+        cancellation: CancellationToken? = nil,
         progress: @escaping @Sendable (Double, String) -> Void
     ) async throws -> [Stem] {
+        let cancellation = cancellation ?? CancellationToken()
+        guard !cancellation.isCancelled else { throw StemError.cancelled }
         let pythonPath = await StemEnvironment.shared.pythonExecutable
         guard FileManager.default.fileExists(atPath: pythonPath.path) else {
             throw StemError.environmentNotReady
@@ -58,23 +92,24 @@ final class StemSeparationService: @unchecked Sendable {
         if let twoStems { arguments += ["--two-stems", twoStems] }
         arguments += ["-o", workDir.path, "--device", device, audioURL.path]
 
-        let runner = RunningProcess()
         do {
-            try await runProcess(pythonPath, arguments, runner: runner) { fraction, message in
+            try await runProcess(pythonPath, arguments, cancellation: cancellation) { fraction, message in
                 progress(fraction, message)
             }
         } catch let error as StemError {
+            guard error != .cancelled, !cancellation.isCancelled else { throw StemError.cancelled }
             // Retry once on CPU if MPS failed.
             if device == "mps" {
                 progress(0, "MPSで失敗、CPUで再試行中…")
                 var cpuArgs = ["-m", "demucs", "-n", model]
                 if let twoStems { cpuArgs += ["--two-stems", twoStems] }
                 cpuArgs += ["-o", workDir.path, "--device", "cpu", audioURL.path]
-                try await runProcess(pythonPath, cpuArgs, runner: RunningProcess(), progress: progress)
+                try await runProcess(pythonPath, cpuArgs, cancellation: cancellation, progress: progress)
             } else {
                 throw error
             }
         }
+        guard !cancellation.isCancelled else { throw StemError.cancelled }
 
         // Demucs writes to <out>/<model>/<track-name-without-ext>/<stem>.wav
         let trackName = audioURL.deletingPathExtension().lastPathComponent
@@ -123,10 +158,11 @@ final class StemSeparationService: @unchecked Sendable {
     private func runProcess(
         _ executable: URL,
         _ arguments: [String],
-        runner: RunningProcess,
+        cancellation: CancellationToken,
         progress: @escaping @Sendable (Double, String) -> Void
     ) async throws {
         try Task.checkCancellation()
+        guard !cancellation.isCancelled else { throw StemError.cancelled }
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let process = Process()
@@ -135,8 +171,6 @@ final class StemSeparationService: @unchecked Sendable {
                 let pipe = Pipe()
                 process.standardOutput = pipe
                 process.standardError = pipe
-                runner.process = process
-
                 let buffer = DataBox()
                 pipe.fileHandleForReading.readabilityHandler = { handle in
                     let chunk = handle.availableData
@@ -153,7 +187,10 @@ final class StemSeparationService: @unchecked Sendable {
                 }
                 process.terminationHandler = { proc in
                     pipe.fileHandleForReading.readabilityHandler = nil
-                    if proc.terminationStatus == 0 {
+                    cancellation.clear(proc)
+                    if cancellation.isCancelled {
+                        continuation.resume(throwing: StemError.cancelled)
+                    } else if proc.terminationStatus == 0 {
                         continuation.resume(returning: ())
                     } else {
                         let tail = String(data: buffer.data, encoding: .utf8) ?? ""
@@ -163,12 +200,14 @@ final class StemSeparationService: @unchecked Sendable {
                 }
                 do {
                     try process.run()
+                    if cancellation.register(process), process.isRunning { process.terminate() }
                 } catch {
+                    cancellation.clear(process)
                     continuation.resume(throwing: error)
                 }
             }
         } onCancel: {
-            runner.process?.terminate()
+            cancellation.cancel()
         }
     }
 
