@@ -1,12 +1,21 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum ContentSheet: String, Identifiable {
+    case export
+    case shortcuts
+
+    var id: String { rawValue }
+}
+
 struct ContentView: View {
     @EnvironmentObject var project: RemixaProject
     @EnvironmentObject var timelineEngine: TimelineEngine
     @State private var showAIPanel = false
-    @State private var showExportSheet = false
+    @State private var showClipInspector = false
+    @State private var activeSheet: ContentSheet?
     @State private var isDropTargeted = false
+    @State private var usesBarsPosition = true
 
     private static let supportedTypes: [UTType] = [
         .mp3, .mpeg4Audio, .wav, .aiff,
@@ -28,13 +37,36 @@ struct ContentView: View {
                     .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                         handleDropOnEmptyArea(providers: providers)
                     }
-                if showAIPanel {
+                if showClipInspector {
+                    Divider()
+                    if let (clip, track) = selectedClipAndTrack() {
+                        ClipInspectorView(project: project, track: track, clip: clip, timelineEngine: timelineEngine)
+                            .frame(width: 280)
+                            .id(clip.id)
+                    } else {
+                        VStack(spacing: 10) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                            Text("クリップを選択すると、ここで詳細を編集できます")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(24)
+                        .frame(width: 280)
+                        .frame(maxHeight: .infinity)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                    }
+                } else if showAIPanel {
                     Divider()
                     AIAssistantPanel()
                         .frame(width: 340)
                         .transition(.move(edge: .trailing))
                 }
             }
+            Divider()
+            TransportBar(engine: timelineEngine, usesBarsPosition: $usesBarsPosition)
         }
         .frame(minWidth: 560, minHeight: 420)
         .onAppear {
@@ -70,8 +102,23 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .remixaNewProject)) { _ in
             newProjectFromUI()
         }
-        .sheet(isPresented: $showExportSheet) {
-            TimelineExportView(project: project)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .export:
+                TimelineExportView(project: project)
+            case .shortcuts:
+                KeyboardShortcutsView()
+                    .frame(width: 460, height: 470)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .remixaToggleInspector)) { _ in
+            withAnimation {
+                showClipInspector.toggle()
+                if showClipInspector { showAIPanel = false }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .remixaShowShortcuts)) { _ in
+            activeSheet = .shortcuts
         }
         .background(KeyEventHandlingView(onSpace: { timelineEngine.togglePlayPause() }))
         .background(StemSeparationFlow())
@@ -129,7 +176,7 @@ struct ContentView: View {
                         .frame(width: 100)
                 }
             }
-            toolbarButton("ミックスを書き出し", "square.and.arrow.up", compact: compact) { showExportSheet = true }
+            toolbarButton("ミックスを書き出し", "square.and.arrow.up", compact: compact) { activeSheet = .export }
                 .disabled(project.projectDuration <= 0)
             toolbarButton("パート分離", "waveform.and.mic", compact: compact) {
                 if let clipId = project.selectedClipID {
@@ -138,9 +185,26 @@ struct ContentView: View {
             }
             .disabled(project.selectedClipID == nil)
             toolbarButton("AIアシスタント", "sparkles", compact: compact) {
-                withAnimation { showAIPanel.toggle() }
+                withAnimation {
+                    showAIPanel.toggle()
+                    if showAIPanel { showClipInspector = false }
+                }
+            }
+            toolbarButton("インスペクタ", "sidebar.right", compact: compact) {
+                withAnimation {
+                    showClipInspector.toggle()
+                    if showClipInspector { showAIPanel = false }
+                }
             }
         }
+    }
+
+    private func selectedClipAndTrack() -> (Clip, Track)? {
+        guard let selectedID = project.selectedClipID else { return nil }
+        for track in project.tracks {
+            if let clip = track.clips.first(where: { $0.id == selectedID }) { return (clip, track) }
+        }
+        return nil
     }
 
     private func addAudioTrack() {
@@ -265,5 +329,210 @@ struct KeyEventHandlingView: NSViewRepresentable {
                 super.keyDown(with: event)
             }
         }
+    }
+}
+
+private struct TransportBar: View {
+    @EnvironmentObject var project: RemixaProject
+    @ObservedObject var engine: TimelineEngine
+    @Binding var usesBarsPosition: Bool
+
+    private var bpmBinding: Binding<Double> {
+        Binding(get: { project.bpm }, set: { project.setBPM($0) })
+    }
+
+    private var signatureBinding: Binding<TimeSignature> {
+        Binding(get: { project.timeSignature }, set: { project.setTimelineSettings(timeSignature: $0) })
+    }
+
+    private var keyBinding: Binding<MusicalKey?> {
+        Binding(get: { project.projectKey }, set: { project.setProjectKey($0) })
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                transportButton("先頭へ", icon: "backward.end.fill") {
+                    NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
+                }
+                transportButton(engine.isPlaying ? "一時停止" : "再生", icon: engine.isPlaying ? "pause.fill" : "play.fill", prominent: true) {
+                    engine.togglePlayPause()
+                }
+                transportButton("停止", icon: "stop.fill") {
+                    engine.stop()
+                    NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
+                }
+            }
+
+            Toggle(isOn: Binding(
+                get: { project.loopRegion != nil },
+                set: { enabled in
+                    if enabled {
+                        let barLength = 60.0 / max(1, project.bpm) * Double(project.beatsPerBar)
+                        let start = max(0, engine.currentTime)
+                        project.loopRegion = start...(start + barLength)
+                    } else {
+                        project.loopRegion = nil
+                    }
+                }
+            )) {
+                Image(systemName: "repeat")
+            }
+            .toggleStyle(.button)
+            .tint(project.loopRegion == nil ? .secondary : .orange)
+            .help("ループ再生")
+
+            Toggle(isOn: Binding(
+                get: { project.playbackMetronomeEnabled },
+                set: { project.setMetronomeSettings(playbackEnabled: $0) }
+            )) {
+                Image(systemName: "metronome")
+            }
+            .toggleStyle(.button)
+            .tint(project.playbackMetronomeEnabled ? .orange : .secondary)
+            .help("再生時のメトロノーム")
+
+            Button {
+                usesBarsPosition.toggle()
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(usesBarsPosition ? "小節.拍.tick" : "分:秒")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    Text(usesBarsPosition ? barsPosition(engine.currentTime) : secondsPosition(engine.currentTime))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                .frame(width: 92, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .help("クリックして小節表示と時間表示を切り替え")
+
+            Divider().frame(height: 26)
+
+            HStack(spacing: 5) {
+                Text("BPM").font(.caption).foregroundStyle(.secondary)
+                TextField("BPM", value: bpmBinding, format: .number.precision(.fractionLength(0...1)))
+                    .frame(width: 54)
+                    .textFieldStyle(.roundedBorder)
+                    .help("プロジェクトのテンポ (20〜400 BPM)")
+            }
+
+            Menu {
+                Picker("拍子", selection: signatureBinding) {
+                    ForEach(TimeSignature.allCases) { signature in
+                        Text(signature.rawValue).tag(signature)
+                    }
+                }
+            } label: {
+                Label(project.timeSignature.rawValue, systemImage: "music.note")
+                    .lineLimit(1)
+            }
+            .help("拍子")
+
+            Menu {
+                Picker("プロジェクトのキー", selection: keyBinding) {
+                    Text("未設定").tag(nil as MusicalKey?)
+                    ForEach(MusicalKey.all) { key in
+                        Text(key.displayName).tag(Optional(key))
+                    }
+                }
+            } label: {
+                Label(project.projectKey?.name ?? "キー未設定", systemImage: "music.note.list")
+                    .lineLimit(1)
+            }
+            .help("プロジェクトのキー")
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func transportButton(
+        _ title: String,
+        icon: String,
+        prominent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .frame(width: prominent ? 30 : 25, height: 26)
+                .background(prominent ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+    }
+
+    private func barsPosition(_ seconds: Double) -> String {
+        let beatLength = 60.0 / max(1, project.bpm)
+        let totalBeats = max(0, seconds) / beatLength
+        let completedBeats = Int(totalBeats)
+        let bar = completedBeats / max(1, project.beatsPerBar) + 1
+        let beat = completedBeats % max(1, project.beatsPerBar) + 1
+        let tick = Int((totalBeats - Double(completedBeats)) * 960)
+        return String(format: "%d.%d.%03d", bar, beat, tick)
+    }
+
+    private func secondsPosition(_ seconds: Double) -> String {
+        let safe = max(0, seconds)
+        let minute = Int(safe) / 60
+        return String(format: "%02d:%04.1f", minute, safe.truncatingRemainder(dividingBy: 60))
+    }
+}
+
+private struct KeyboardShortcutsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let shortcuts: [(String, String)] = [
+        ("再生 / 一時停止", "Space"),
+        ("先頭へ移動", "Home / Return"),
+        ("分割", "⌘B"),
+        ("複製", "⌘D"),
+        ("削除", "Delete"),
+        ("拡大 / 縮小", "⌘+ / ⌘−"),
+        ("全体を表示", "⌘0"),
+        ("選択範囲に合わせる", "⇧⌘0"),
+        ("再生位置へ移動", "⌘J"),
+        ("インスペクタの表示切替", "⌘⌥I"),
+        ("元に戻す / やり直す", "⌘Z / ⇧⌘Z"),
+        ("保存", "⌘S"),
+        ("別名で保存", "⇧⌘S"),
+        ("プロジェクトを開く", "⌘O"),
+        ("音声ファイルを追加", "⇧⌘O")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("キーボードショートカット")
+                .font(.title2.bold())
+                .padding(.bottom, 12)
+            Divider()
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(shortcuts.enumerated()), id: \.offset) { row in
+                        HStack {
+                            Text(row.element.0)
+                            Spacer()
+                            Text(row.element.1)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 7)
+                        Divider()
+                    }
+                }
+            }
+            .padding(.top, 4)
+            HStack {
+                Spacer()
+                Button("閉じる") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.top, 12)
+        }
+        .padding(20)
     }
 }

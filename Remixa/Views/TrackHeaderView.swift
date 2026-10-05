@@ -1,4 +1,24 @@
 import SwiftUI
+import AppKit
+
+enum TrackColorPalette {
+    static var items: [(name: String, color: Color)] {
+        [
+            ("青", Color(nsColor: .systemBlue)),
+            ("紫", Color(nsColor: .systemPurple)),
+            ("ピンク", Color(nsColor: .systemPink)),
+            ("赤", Color(nsColor: .systemRed)),
+            ("オレンジ", Color(nsColor: .systemOrange)),
+            ("黄", Color(nsColor: .systemYellow)),
+            ("緑", Color(nsColor: .systemGreen)),
+            ("ティール", Color(nsColor: .systemTeal))
+        ]
+    }
+
+    static func color(for index: Int) -> Color {
+        items[((index % items.count) + items.count) % items.count].color
+    }
+}
 
 /// Left-hand mixer strip for one track: name, volume/pan, mute/solo, effects rack access.
 struct TrackHeaderView: View {
@@ -12,6 +32,9 @@ struct TrackHeaderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
+                Circle()
+                    .fill(TrackColorPalette.color(for: track.colorIndex))
+                    .frame(width: 8, height: 8)
                 if isRenaming {
                     TextField("トラック名", text: $draftName, onCommit: {
                         project.rename(track, to: draftName.isEmpty ? track.name : draftName)
@@ -30,6 +53,17 @@ struct TrackHeaderView: View {
                 }
                 Spacer()
                 Menu {
+                    Picker("クリップの色", selection: Binding(
+                        get: { track.colorIndex },
+                        set: { project.updateTrack(track, colorIndex: $0) }
+                    )) {
+                        ForEach(0..<Track.colorCount, id: \.self) { index in
+                            Label(TrackColorPalette.items[index].name, systemImage: "circle.fill")
+                                .foregroundStyle(TrackColorPalette.color(for: index))
+                                .tag(index)
+                        }
+                    }
+                    Divider()
                     Button("トラック削除", role: .destructive) { project.deleteTrack(track) }
                 } label: {
                     Image(systemName: "ellipsis.circle")

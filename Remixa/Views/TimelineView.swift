@@ -17,7 +17,7 @@ struct TimelineView: View {
     @StateObject private var horizontalScroller = TimelineHorizontalScroller()
 
     private let headerWidth: CGFloat = 190
-    private let rulerHeight: CGFloat = 26
+    private let rulerHeight: CGFloat = 34
     private let markerHeight: CGFloat = 25
     private let laneHeight: CGFloat = 88
 
@@ -38,7 +38,10 @@ struct TimelineView: View {
                                     pixelsPerSecond: pixelsPerSecond,
                                     bpm: project.bpm,
                                     beatsPerBar: project.beatsPerBar,
-                                    width: totalWidth
+                                    snapDivision: project.snapDivision,
+                                    markers: project.markers,
+                                    onSeek: { engine.seek(to: $0) },
+                                    onLoopChange: { project.loopRegion = $0 }
                                 )
                                 .frame(height: rulerHeight)
                                 MarkerRowView(
@@ -92,10 +95,27 @@ struct TimelineView: View {
                                 .allowsHitTesting(false)
                         }
                         .contentShape(Rectangle())
-                        .onTapGesture { location in
-                            guard !isAutomationMode else { return }
-                            let seconds = max(0, Double(location.x) / pixelsPerSecond)
-                            engine.seek(to: seconds)
+                        .overlay {
+                            if project.tracks.allSatisfy({ $0.clips.isEmpty }) {
+                                VStack(spacing: 10) {
+                                    Image(systemName: "waveform.badge.plus")
+                                        .font(.system(size: 34, weight: .light))
+                                        .foregroundStyle(.secondary)
+                                    Text("ミックスを始めましょう")
+                                        .font(.headline)
+                                    Text("ここに音声ファイルをドロップ")
+                                        .foregroundStyle(.secondary)
+                                    Button {
+                                        NotificationCenter.default.post(name: .remixaAddAudioTrack, object: nil)
+                                    } label: {
+                                        Label("ファイルを追加…", systemImage: "plus")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+                                .padding(24)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08)))
+                            }
                         }
                     }
                     .onChange(of: Int(engine.currentTime * pixelsPerSecond / max(180, Double(viewportWidth) * 0.75))) { _, _ in
@@ -147,29 +167,25 @@ struct TimelineView: View {
         }
     }
 
+    @ViewBuilder
     private func timelineToolbar(viewportWidth: CGFloat) -> some View {
         let limits = zoomLimits(viewportWidth: viewportWidth)
-        return HStack(spacing: 12) {
+        ViewThatFits(in: .horizontal) {
+            toolbarContent(compact: false, limits: limits)
+            toolbarContent(compact: true, limits: limits)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+    }
+
+    private func toolbarContent(compact: Bool, limits: ClosedRange<Double>) -> some View {
+        HStack(spacing: 6) {
             Button {
-                let track = project.addTrack()
-                _ = track
+                _ = project.addTrack()
             } label: {
-                Label("トラック追加", systemImage: "plus.rectangle.on.rectangle")
+                controlLabel("トラック追加", "plus.rectangle.on.rectangle", compact: compact)
             }
-            .fixedSize()
-
-            Divider().frame(height: 16)
-
-            HStack(spacing: 4) {
-                Text("BPM").fixedSize()
-                TextField("BPM", value: Binding(
-                    get: { project.bpm },
-                    set: { project.setBPM($0) }
-                ), format: .number)
-                    .frame(width: 50)
-                    .textFieldStyle(.roundedBorder)
-                    .help("設定範囲: 20〜400 BPM")
-            }
+            .help("トラック追加")
 
             Menu {
                 Toggle("レーンを表示・編集", isOn: $isAutomationMode)
@@ -179,40 +195,17 @@ struct TimelineView: View {
                     }
                 }
             } label: {
-                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                controlLabel("オートメーション", "point.topleft.down.curvedto.point.bottomright.up", compact: compact)
                     .foregroundStyle(isAutomationMode ? Color.accentColor : Color.primary)
             }
-            .help("トラックのオートメーション")
+            .help("オートメーションレーン")
 
             Menu {
-                Picker("拍子", selection: Binding(
-                    get: { project.timeSignature },
-                    set: { project.setTimelineSettings(timeSignature: $0) }
-                )) {
-                    ForEach(TimeSignature.allCases) { signature in Text(signature.rawValue).tag(signature) }
-                }
-                Picker("スナップ単位", selection: Binding(
-                    get: { project.snapDivision },
-                    set: { project.setTimelineSettings(snapDivision: $0) }
-                )) {
-                    ForEach(SnapDivision.allCases) { division in Text(division.japaneseName).tag(division) }
-                }
-            } label: {
-                Image(systemName: project.snapDivision == .off ? "square.grid.3x3" : "square.grid.3x3.fill")
-            }
-            .help("拍子・スナップ単位")
-
-            Menu {
-                Toggle("再生時のメトロノーム", isOn: Binding(
-                    get: { project.playbackMetronomeEnabled },
-                    set: { project.setMetronomeSettings(playbackEnabled: $0) }
-                ))
                 Toggle("再生時に1小節カウントイン", isOn: Binding(
                     get: { project.countInEnabled },
                     set: { project.setMetronomeSettings(countIn: $0) }
                 ))
-                Divider()
-                Toggle("書き出し時のメトロノーム", isOn: Binding(
+                Toggle("書き出しにクリック音を含める", isOn: Binding(
                     get: { project.exportMetronomeEnabled },
                     set: { project.setMetronomeSettings(exportEnabled: $0) }
                 ))
@@ -224,99 +217,66 @@ struct TimelineView: View {
                 })
                 Text("クリック音量 \(Int(project.metronomeVolume * 100))%")
             } label: {
-                Image(systemName: "metronome")
+                controlLabel("クリック設定", "metronome", compact: compact)
             }
-            .help("メトロノームとカウントイン")
+            .help("カウントインと書き出し時のクリック設定")
 
             Button { _ = project.addMarker(at: engine.currentTime) } label: {
-                Image(systemName: "mappin.and.ellipse")
+                controlLabel("マーカー", "mappin.and.ellipse", compact: compact)
             }
             .help("再生位置にマーカーを追加")
 
-            Divider().frame(height: 16)
-
-            Button {
-                project.splitSelectedClips(at: engine.currentTime)
-            } label: { Image(systemName: "scissors") }
-            .help("分割")
-            .disabled(project.selectedClipIDs.isEmpty)
-
-            Button {
-                project.duplicateSelectedClips()
-            } label: { Image(systemName: "plus.square.on.square") }
-            .help("複製")
-            .disabled(project.selectedClipIDs.isEmpty)
-
-            Button(role: .destructive) {
-                project.deleteSelectedClips()
-            } label: { Image(systemName: "trash") }
-            .help("クリップ削除")
-            .disabled(project.selectedClipIDs.isEmpty)
-
-            if let (clip, _) = selectedClipAndTrack() {
-                Menu {
-                    Picker("プロジェクトのキー", selection: Binding<MusicalKey?>(
-                        get: { project.projectKey },
-                        set: { project.setProjectKey($0) }
-                    )) {
-                        Text("未設定").tag(nil as MusicalKey?)
-                        ForEach(MusicalKey.all) { key in Text(key.displayName).tag(Optional(key)) }
-                    }
-                    Button("このクリップのキーを検出") { detectKey(for: clip) }
-                    Button("プロジェクトのキーに合わせる") {
-                        try? project.matchClipToProjectKey(clipID: clip.id)
-                        engine.refreshPlaybackSchedule()
-                    }
-                    .disabled(project.projectKey == nil || clip.detectedKey == nil)
-                    Divider()
-                    Button("ピッチを1半音下げる") {
-                        project.setClipPitch(clip.pitchSemitones - 1, clipID: clip.id)
-                        engine.refreshPlaybackSchedule()
-                    }
-                    Button("ピッチを1半音上げる") {
-                        project.setClipPitch(clip.pitchSemitones + 1, clipID: clip.id)
-                        engine.refreshPlaybackSchedule()
-                    }
-                    Text("現在: \(clip.pitchSemitones) 半音 · キー: \(clip.detectedKey?.displayName ?? "未検出")")
-                } label: {
-                    Image(systemName: "music.note")
-                }
-                .help("プロジェクトキー・クリップのピッチ")
+            Menu {
+                Button("分割") { project.splitSelectedClips(at: engine.currentTime) }
+                    .keyboardShortcut("b", modifiers: [.command])
+                    .disabled(project.selectedClipIDs.isEmpty)
+                Button("複製") { project.duplicateSelectedClips() }
+                    .keyboardShortcut("d", modifiers: [.command])
+                    .disabled(project.selectedClipIDs.isEmpty)
+                Button("削除") { project.deleteSelectedClips() }
+                    .keyboardShortcut(.delete)
+                    .disabled(project.selectedClipIDs.isEmpty)
+            } label: {
+                controlLabel("編集", "scissors", compact: compact)
             }
-
-            Divider().frame(height: 16)
-
-            Button {
-                if let loop = project.loopRegion, abs(loop.lowerBound - engine.currentTime) < 0.01 {
-                    project.loopRegion = nil
-                } else {
-                    let start = engine.currentTime
-                    project.loopRegion = start...(start + 4)
-                }
-            } label: { Image(systemName: "repeat") }
-            .help("ループ範囲")
+            .help("編集: 分割・複製・削除")
 
             Menu {
+                Picker("スナップ", selection: Binding(
+                    get: { project.snapDivision },
+                    set: { project.setTimelineSettings(snapDivision: $0) }
+                )) {
+                    ForEach(SnapDivision.allCases) { division in
+                        Text(division.japaneseName).tag(division)
+                    }
+                }
+                Divider()
+                HStack {
+                    Image(systemName: "minus.magnifyingglass")
+                    Slider(value: $pixelsPerSecond, in: limits)
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                .frame(width: 180)
                 Button("全体を表示") { NotificationCenter.default.post(name: .remixaFitAll, object: nil) }
                 Button("選択範囲に合わせる") { NotificationCenter.default.post(name: .remixaFitSelection, object: nil) }
                     .disabled(project.selectedClipIDs.isEmpty)
                 Button("再生位置へ移動") { NotificationCenter.default.post(name: .remixaScrollToPlayhead, object: nil) }
             } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                controlLabel("表示", "arrow.up.left.and.arrow.down.right", compact: compact)
             }
-            .help("タイムラインの表示")
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                Image(systemName: "minus.magnifyingglass")
-                Slider(value: $pixelsPerSecond, in: limits)
-                Image(systemName: "plus.magnifyingglass")
-            }
-            .frame(width: 160)
+            .help("表示: スナップ・ズーム・全体表示")
         }
-        .padding(8)
         .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private func controlLabel(_ title: String, _ symbol: String, compact: Bool) -> some View {
+        if compact {
+            Image(systemName: symbol)
+        } else {
+            Label(title, systemImage: symbol).lineLimit(1).fixedSize()
+        }
     }
 
     private func fitAll(viewportWidth: CGFloat) {
@@ -352,34 +312,6 @@ struct TimelineView: View {
         }
         let selectionFit = availableWidth / selectedSpan
         return min(0.5, allFit)...max(240, max(allFit, selectionFit) * 4)
-    }
-
-    private func detectKey(for clip: Clip) {
-        guard let snapshot = project.keyDetectionSnapshot(for: clip.id) else { return }
-        Task { @MainActor in
-            let result = await Task.detached(priority: .userInitiated) {
-                KeyDetector.estimate(
-                    fileURL: snapshot.sourceURL,
-                    sourceStart: Double(bitPattern: snapshot.sourceStartBits),
-                    duration: Double(bitPattern: snapshot.durationBits)
-                )
-            }.value
-            if let result {
-                if !project.setDetectedKey(result, matching: snapshot) {
-                    project.errorMessage = "解析中に音源またはトリム範囲が変更されたため、結果を破棄しました"
-                }
-            } else {
-                project.errorMessage = "クリップのキーを推定できませんでした"
-            }
-        }
-    }
-
-    private func selectedClipAndTrack() -> (Clip, Track)? {
-        guard let id = project.selectedClipID else { return nil }
-        for track in project.tracks {
-            if let clip = track.clips.first(where: { $0.id == id }) { return (clip, track) }
-        }
-        return nil
     }
 
     private var trackHeaders: some View {
@@ -486,28 +418,125 @@ private struct TimeRulerView: View {
     let pixelsPerSecond: Double
     let bpm: Double
     let beatsPerBar: Int
-    let width: CGFloat
+    let snapDivision: SnapDivision
+    let markers: [ProjectMarker]
+    let onSeek: (Double) -> Void
+    let onLoopChange: (ClosedRange<Double>) -> Void
+
+    @State private var dragStartX: CGFloat?
+    @State private var isLoopDrag = false
 
     var body: some View {
         Canvas { context, size in
             let beatLength = 60.0 / max(bpm, 1)
+            let barSpacing = beatLength * Double(max(1, beatsPerBar)) * pixelsPerSecond
+            let barLabelStep = max(1, niceIntegerStep(for: 42 / max(barSpacing, 0.001)))
             var t = 0.0
             var beatIndex = 0
             while t * pixelsPerSecond < Double(size.width) {
                 let x = CGFloat(t * pixelsPerSecond)
                 let isBar = beatIndex % max(1, beatsPerBar) == 0
                 var path = Path()
-                path.move(to: CGPoint(x: x, y: isBar ? 0 : size.height * 0.5))
+                path.move(to: CGPoint(x: x, y: isBar ? 0 : size.height * 0.56))
                 path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: .color(.secondary.opacity(isBar ? 0.8 : 0.3)))
-                if isBar {
-                    context.draw(Text(String(format: "%.0fs", t)).font(.caption2), at: CGPoint(x: x + 2, y: 4), anchor: .topLeading)
+                context.stroke(path, with: .color(.primary.opacity(isBar ? 0.35 : 0.13)))
+                let barNumber = beatIndex / max(1, beatsPerBar) + 1
+                if isBar && (barNumber - 1) % barLabelStep == 0 {
+                    context.draw(
+                        Text("\(barNumber)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.primary),
+                        at: CGPoint(x: x + 3, y: 1),
+                        anchor: .topLeading
+                    )
                 }
                 t += beatLength
                 beatIndex += 1
             }
+
+            let secondLabelStep = niceTimeStep(for: 48 / max(pixelsPerSecond, 0.001))
+            var second = 0.0
+            while second * pixelsPerSecond < Double(size.width) {
+                let x = CGFloat(second * pixelsPerSecond)
+                let minute = Int(second) / 60
+                let remainder = Int(second) % 60
+                context.draw(
+                    Text(String(format: "%d:%02d", minute, remainder))
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundColor(.secondary),
+                    at: CGPoint(x: x + 3, y: size.height - 11),
+                    anchor: .topLeading
+                )
+                second += secondLabelStep
+            }
+
+            for marker in markers {
+                let x = CGFloat(marker.time) * pixelsPerSecond
+                guard x < size.width else { continue }
+                var line = Path()
+                line.move(to: CGPoint(x: x, y: 0))
+                line.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(line, with: .color(.orange.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                context.fill(Path(ellipseIn: CGRect(x: x - 3, y: 1, width: 6, height: 6)), with: .color(.orange))
+            }
         }
-        .background(Color.gray.opacity(0.08))
+        .background(Color.primary.opacity(0.035))
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    if dragStartX == nil { dragStartX = value.startLocation.x }
+                    guard let dragStartX else { return }
+                    if abs(value.location.x - dragStartX) > 4 { isLoopDrag = true }
+                    guard isLoopDrag else { return }
+                    let start = snappedTime(for: min(dragStartX, value.location.x))
+                    let end = snappedTime(for: max(dragStartX, value.location.x))
+                    onLoopChange(start...max(start + 0.05, end))
+                }
+                .onEnded { value in
+                    guard let dragStartX else { return }
+                    if isLoopDrag {
+                        let start = snappedTime(for: min(dragStartX, value.location.x))
+                        let end = snappedTime(for: max(dragStartX, value.location.x))
+                        onLoopChange(start...max(start + 0.05, end))
+                    } else {
+                        onSeek(max(0, Double(value.location.x) / pixelsPerSecond))
+                    }
+                    self.dragStartX = nil
+                    isLoopDrag = false
+                }
+        )
+        .help("クリックで再生位置を移動、ドラッグでループ範囲を設定")
+    }
+
+    private func snappedTime(for x: CGFloat) -> Double {
+        let seconds = max(0, Double(x) / pixelsPerSecond)
+        let beatLength = 60.0 / max(1, bpm)
+        let interval: Double
+        switch snapDivision {
+        case .quarterBeat: interval = beatLength / 4
+        case .halfBeat: interval = beatLength / 2
+        case .beat: interval = beatLength
+        case .bar: interval = beatLength * Double(max(1, beatsPerBar))
+        case .off: return seconds
+        }
+        return (seconds / interval).rounded() * interval
+    }
+
+    private func niceIntegerStep(for minimum: Double) -> Int {
+        let target = max(1, Int(ceil(minimum)))
+        let magnitude = pow(10, floor(log10(Double(target))))
+        let normalized = Double(target) / magnitude
+        let factor: Double = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+        return max(1, Int(factor * magnitude))
+    }
+
+    private func niceTimeStep(for minimum: Double) -> Double {
+        let target = max(1, minimum)
+        let magnitude = pow(10, floor(log10(target)))
+        let normalized = target / magnitude
+        let factor: Double = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+        return factor * magnitude
     }
 }
 

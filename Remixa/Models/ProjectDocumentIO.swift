@@ -102,6 +102,7 @@ enum ProjectDocumentIO {
             snapshotTracks.append(
                 ProjectSnapshot.TrackSnapshot(
                     id: track.id, name: track.name, clips: updatedClips,
+                    colorIndex: track.colorIndex,
                     volume: track.volume, pan: track.pan, mute: track.mute, solo: track.solo,
                     effects: EffectsRackSettingsCodable(settings: track.effects),
                     automation: track.automation

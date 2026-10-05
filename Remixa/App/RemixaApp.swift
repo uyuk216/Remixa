@@ -153,6 +153,17 @@ struct RemixaApp: App {
                 Button("先頭へ移動") { NotificationCenter.default.post(name: .remixaGoToStart, object: nil) }
                     .keyboardShortcut(.return)
             }
+            CommandMenu("表示") {
+                Button("インスペクタを表示 / 隠す") {
+                    NotificationCenter.default.post(name: .remixaToggleInspector, object: nil)
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+            }
+            CommandGroup(after: .help) {
+                Button("キーボードショートカット") {
+                    NotificationCenter.default.post(name: .remixaShowShortcuts, object: nil)
+                }
+            }
         }
 
         Settings {
@@ -226,4 +237,6 @@ extension Notification.Name {
     static let remixaFitSelection = Notification.Name("remixaFitSelection")
     static let remixaScrollToPlayhead = Notification.Name("remixaScrollToPlayhead")
     static let remixaGoToStart = Notification.Name("remixaGoToStart")
+    static let remixaToggleInspector = Notification.Name("remixaToggleInspector")
+    static let remixaShowShortcuts = Notification.Name("remixaShowShortcuts")
 }

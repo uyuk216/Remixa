@@ -121,35 +121,52 @@ private struct ClipView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.accentColor.opacity(isSelected ? 0.85 : 0.55))
-            Canvas { context, size in
-                let path = waveformPath(in: size)
-                context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1)
+        ZStack {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(TrackColorPalette.color(for: track.colorIndex).opacity(isSelected ? 0.76 : 0.56))
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(clip.name)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 2)
+                    if !changeBadge.isEmpty {
+                        Text(changeBadge)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.black.opacity(0.4), in: Capsule())
+                    }
+                }
+                .padding(.horizontal, 5)
+                .frame(height: 21)
+                .background(Color.black.opacity(0.5))
+
+                Canvas { context, size in
+                    let path = waveformPath(in: size)
+                    context.stroke(path, with: .color(.primary.opacity(0.9)), lineWidth: 1)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(isSelected ? Color.white : Color.clear, lineWidth: 1.5)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(clip.name)
-                    .font(.caption2)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 2)
-                Text(tempoSummary)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
-                    .padding(.horizontal, 4)
-                Spacer()
-            }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+
             HStack(spacing: 0) {
                 trimHandle(leading: true)
                 Spacer()
                 trimHandle(leading: false)
             }
+
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(
+                    isSelected ? Color.accentColor : TrackColorPalette.color(for: track.colorIndex).opacity(0.95),
+                    lineWidth: isSelected ? 2.5 : 1
+                )
+                .shadow(color: isSelected ? Color.accentColor.opacity(0.35) : .clear, radius: 3)
         }
         .frame(width: clipWidth, height: laneHeight - 12)
         .offset(x: clipX, y: 6)
@@ -200,12 +217,14 @@ private struct ClipView: View {
         }
     }
 
-    private var tempoSummary: String {
-        let rate = String(format: "%.2f×", clip.tempoRate)
-        let bpm = clip.sourceBPM.map { String(format: "%.0f BPM", $0) } ?? "元BPM未設定"
-        let pitch = clip.pitchSemitones == 0 ? "±0半音" : "\(clip.pitchSemitones > 0 ? "+" : "")\(clip.pitchSemitones)半音"
-        let key = clip.detectedKey.map { " · \($0.displayName)" } ?? ""
-        return "\(rate) · \(bpm)\(clip.syncToProject ? " · 同期" : "") · \(pitch)\(key)"
+    private var changeBadge: String {
+        var parts: [String] = []
+        if abs(clip.tempoRate - 1) > 0.001 { parts.append(String(format: "%.2f×", clip.tempoRate)) }
+        if let sourceBPM = clip.sourceBPM { parts.append(String(format: "%.0f BPM", sourceBPM)) }
+        if clip.syncToProject { parts.append("同期") }
+        if clip.pitchSemitones != 0 { parts.append("\(clip.pitchSemitones > 0 ? "+" : "")\(clip.pitchSemitones)半音") }
+        if let key = clip.detectedKey { parts.append(key.name) }
+        return parts.joined(separator: " · ")
     }
 
     /// Builds the waveform stroke path for the visible (trimmed) portion of the clip,

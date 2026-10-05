@@ -319,9 +319,12 @@ struct Clip: Identifiable, Codable, Equatable, Sendable {
 /// One track on the timeline: an ordered set of non-overlapping-in-time clips plus
 /// mixing state (volume/pan/mute/solo) and its own effects rack.
 final class Track: ObservableObject, Identifiable, Codable {
+    static let colorCount = 8
+
     let id: UUID
     @Published var name: String
     @Published var clips: [Clip]
+    @Published var colorIndex: Int
     @Published var volume: Double = 1.0     // 0...2
     @Published var pan: Double = 0          // -1...1
     @Published var mute: Bool = false
@@ -329,16 +332,18 @@ final class Track: ObservableObject, Identifiable, Codable {
     @Published var effects = EffectsRackSettings()
     @Published var automation: [AutomationLane] = []
 
-    init(id: UUID = UUID(), name: String, clips: [Clip] = []) {
+    init(id: UUID = UUID(), name: String, clips: [Clip] = [], colorIndex: Int? = nil) {
         self.id = id
         self.name = name
         self.clips = clips
+        self.colorIndex = colorIndex.map { (($0 % Self.colorCount) + Self.colorCount) % Self.colorCount }
+            ?? Self.defaultColorIndex(for: id)
     }
 
     // MARK: Codable (manual, because @Published properties aren't auto-Codable)
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, clips, volume, pan, mute, solo, effects, automation
+        case id, name, clips, colorIndex, volume, pan, mute, solo, effects, automation
     }
 
     convenience init(from decoder: Decoder) throws {
@@ -346,7 +351,7 @@ final class Track: ObservableObject, Identifiable, Codable {
         let id = try c.decode(UUID.self, forKey: .id)
         let name = try c.decode(String.self, forKey: .name)
         let clips = try c.decode([Clip].self, forKey: .clips)
-        self.init(id: id, name: name, clips: clips)
+        self.init(id: id, name: name, clips: clips, colorIndex: try c.decodeIfPresent(Int.self, forKey: .colorIndex))
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1.0
         pan = try c.decodeIfPresent(Double.self, forKey: .pan) ?? 0
         mute = try c.decodeIfPresent(Bool.self, forKey: .mute) ?? false
@@ -360,6 +365,7 @@ final class Track: ObservableObject, Identifiable, Codable {
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
         try c.encode(clips, forKey: .clips)
+        try c.encode(colorIndex, forKey: .colorIndex)
         try c.encode(volume, forKey: .volume)
         try c.encode(pan, forKey: .pan)
         try c.encode(mute, forKey: .mute)
@@ -370,7 +376,7 @@ final class Track: ObservableObject, Identifiable, Codable {
 
     /// A deep value-copy, used for undo/redo snapshots.
     func copy() -> Track {
-        let t = Track(id: id, name: name, clips: clips)
+        let t = Track(id: id, name: name, clips: clips, colorIndex: colorIndex)
         t.volume = volume
         t.pan = pan
         t.mute = mute
@@ -378,6 +384,10 @@ final class Track: ObservableObject, Identifiable, Codable {
         t.effects = effects
         t.automation = automation
         return t
+    }
+
+    static func defaultColorIndex(for id: UUID) -> Int {
+        id.uuidString.utf8.reduce(0) { ($0 &+ Int($1)) % colorCount }
     }
 
     func automationValue(for parameter: AutomationParameter, at time: Double) -> Double? {
@@ -491,6 +501,7 @@ struct ProjectSnapshot: Codable {
         var id: UUID
         var name: String
         var clips: [Clip]
+        var colorIndex: Int
         var volume: Double
         var pan: Double
         var mute: Bool
@@ -499,13 +510,14 @@ struct ProjectSnapshot: Codable {
         var automation: [AutomationLane]
 
         private enum CodingKeys: String, CodingKey {
-            case id, name, clips, volume, pan, mute, solo, effects, automation
+            case id, name, clips, colorIndex, volume, pan, mute, solo, effects, automation
         }
 
         init(
             id: UUID,
             name: String,
             clips: [Clip],
+            colorIndex: Int = 0,
             volume: Double,
             pan: Double,
             mute: Bool,
@@ -516,6 +528,7 @@ struct ProjectSnapshot: Codable {
             self.id = id
             self.name = name
             self.clips = clips
+            self.colorIndex = colorIndex
             self.volume = volume
             self.pan = pan
             self.mute = mute
@@ -529,6 +542,7 @@ struct ProjectSnapshot: Codable {
             id = try container.decode(UUID.self, forKey: .id)
             name = try container.decode(String.self, forKey: .name)
             clips = try container.decode([Clip].self, forKey: .clips)
+            colorIndex = try container.decodeIfPresent(Int.self, forKey: .colorIndex) ?? Track.defaultColorIndex(for: id)
             volume = try container.decode(Double.self, forKey: .volume)
             pan = try container.decode(Double.self, forKey: .pan)
             mute = try container.decode(Bool.self, forKey: .mute)
@@ -613,7 +627,7 @@ final class RemixaProject: ObservableObject {
     var anySolo: Bool { tracks.contains { $0.solo } }
 
     init() {
-        tracks = [Track(name: "トラック 1")]
+        tracks = [Track(name: "トラック 1", colorIndex: 0)]
     }
 
     // MARK: - Undo
@@ -624,7 +638,7 @@ final class RemixaProject: ObservableObject {
             masterVolume: masterVolume,
             tracks: tracks.map {
                 ProjectSnapshot.TrackSnapshot(
-                    id: $0.id, name: $0.name, clips: $0.clips,
+                    id: $0.id, name: $0.name, clips: $0.clips, colorIndex: $0.colorIndex,
                     volume: $0.volume, pan: $0.pan, mute: $0.mute, solo: $0.solo,
                     effects: EffectsRackSettingsCodable(settings: $0.effects),
                     automation: $0.automation
@@ -653,7 +667,7 @@ final class RemixaProject: ObservableObject {
         countInEnabled = snap.countInEnabled
         projectKey = snap.projectKey
         tracks = snap.tracks.map { ts in
-            let t = Track(id: ts.id, name: ts.name, clips: ts.clips)
+            let t = Track(id: ts.id, name: ts.name, clips: ts.clips, colorIndex: ts.colorIndex)
             t.volume = ts.volume; t.pan = ts.pan; t.mute = ts.mute; t.solo = ts.solo
             t.effects = ts.effects.settings
             t.automation = ts.automation
@@ -1026,6 +1040,7 @@ final class RemixaProject: ObservableObject {
     func updateTrack(
         _ track: Track,
         name: String? = nil,
+        colorIndex: Int? = nil,
         volume: Double? = nil,
         pan: Double? = nil,
         mute: Bool? = nil,
@@ -1034,6 +1049,7 @@ final class RemixaProject: ObservableObject {
     ) {
         guard tracks.contains(where: { $0.id == track.id }) else { return }
         let changes = (name.map { $0 != track.name } ?? false)
+            || (colorIndex.map { $0 != track.colorIndex } ?? false)
             || (volume.map { $0 != track.volume } ?? false)
             || (pan.map { $0 != track.pan } ?? false)
             || (mute.map { $0 != track.mute } ?? false)
@@ -1042,6 +1058,7 @@ final class RemixaProject: ObservableObject {
         guard changes else { return }
         registerEdit()
         if let name { track.name = name }
+        if let colorIndex { track.colorIndex = ((colorIndex % Track.colorCount) + Track.colorCount) % Track.colorCount }
         if let volume { track.volume = volume }
         if let pan { track.pan = pan }
         if let mute { track.mute = mute }
@@ -1071,7 +1088,7 @@ final class RemixaProject: ObservableObject {
     @discardableResult
     func addTrack(named name: String = "新規トラック", audioURL: URL? = nil, at timelineStart: Double = 0) -> Track {
         pushUndo()
-        let track = Track(name: name)
+        let track = Track(name: name, colorIndex: tracks.count % Track.colorCount)
         if let audioURL, let duration = try? AudioFileRegionReader.duration(of: audioURL) {
             track.clips.append(Clip(name: audioURL.deletingPathExtension().lastPathComponent, audioURL: audioURL, timelineStart: max(0, snapped(timelineStart)), sourceStart: 0, duration: duration))
         }
@@ -1184,6 +1201,7 @@ final class RemixaProject: ObservableObject {
     func updateClip(
         _ clip: Clip,
         on track: Track,
+        name: String? = nil,
         timelineStart: Double? = nil,
         sourceStart: Double? = nil,
         duration: Double? = nil,
@@ -1197,6 +1215,7 @@ final class RemixaProject: ObservableObject {
     ) {
         guard let index = track.clips.firstIndex(where: { $0.id == clip.id }) else { return }
         var updated = track.clips[index]
+        if let name { updated.name = name }
         if let timelineStart { updated.timelineStart = max(0, timelineStart) }
         var manuallyChangedRate = false
         if let tempoRate, tempoRate.isFinite {
@@ -1562,7 +1581,7 @@ final class RemixaProject: ObservableObject {
 
     func resetForNewProject() {
         cancelAllActiveStemSeparations()
-        tracks = [Track(name: "トラック 1")]
+        tracks = [Track(name: "トラック 1", colorIndex: 0)]
         bpm = 120
         masterVolume = 1.0
         loopRegion = nil
