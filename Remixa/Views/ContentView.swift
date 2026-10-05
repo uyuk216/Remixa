@@ -23,105 +23,160 @@ struct ContentView: View {
     ]
 
     var body: some View {
+        presentedContent
+            .background(KeyEventHandlingView(onSpace: { timelineEngine.togglePlayPause() }))
+            .background(StemSeparationFlow())
+    }
+
+    private var presentedContent: some View {
+        notificationContent
+            .sheet(item: $activeSheet) { sheet in
+                sheetView(for: sheet)
+            }
+    }
+
+    private var notificationContent: some View {
+        observedContent
+            .onReceive(NotificationCenter.default.publisher(for: .remixaAddAudioTrack)) { _ in
+                addAudioTrack()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaOpenDocument)) { notification in
+                openDocument(from: notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaSaveProject)) { _ in
+                saveProject(saveAs: false)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaSaveProjectAs)) { _ in
+                saveProject(saveAs: true)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaOpenProject)) { _ in
+                openProjectPanel()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaNewProject)) { _ in
+                newProjectFromUI()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaToggleInspector)) { _ in
+                toggleInspector()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .remixaShowShortcuts)) { _ in
+                activeSheet = .shortcuts
+            }
+    }
+
+    private var observedContent: some View {
+        mainLayout
+            .frame(minWidth: 560, minHeight: 420)
+            .onAppear {
+                timelineEngine.attach(project: project)
+            }
+            .onChange(of: project.tracks.count) { _, _ in timelineEngine.rebuildGraph() }
+            .onChange(of: project.mixStateRevision) { _, _ in timelineEngine.syncMixState() }
+            .onChange(of: project.bpm) { _, _ in timelineEngine.refreshPlaybackSchedule() }
+            .onChange(of: project.playbackMetronomeEnabled) { _, _ in timelineEngine.refreshMetronomeSettings() }
+            .onChange(of: project.metronomeVolume) { _, _ in timelineEngine.refreshMetronomeSettings() }
+            .onChange(of: project.timeSignature) { _, _ in timelineEngine.refreshMetronomeSettings() }
+    }
+
+    private var mainLayout: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            if let error = project.errorMessage {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .padding(6)
-            }
-            HStack(spacing: 0) {
-                TimelineView(engine: timelineEngine)
-                    .environmentObject(project)
-                    .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-                        handleDropOnEmptyArea(providers: providers)
-                    }
-                if showClipInspector {
-                    Divider()
-                    if let (clip, track) = selectedClipAndTrack() {
-                        ClipInspectorView(project: project, track: track, clip: clip, timelineEngine: timelineEngine)
-                            .frame(width: 280)
-                            .id(clip.id)
-                    } else {
-                        VStack(spacing: 10) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                            Text("クリップを選択すると、ここで詳細を編集できます")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(24)
-                        .frame(width: 280)
-                        .frame(maxHeight: .infinity)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                    }
-                } else if showAIPanel {
-                    Divider()
-                    AIAssistantPanel()
-                        .frame(width: 340)
-                        .transition(.move(edge: .trailing))
-                }
-            }
+            errorMessage
+            workspace
             Divider()
             TransportBar(engine: timelineEngine, usesBarsPosition: $usesBarsPosition)
         }
-        .frame(minWidth: 560, minHeight: 420)
-        .onAppear {
-            timelineEngine.attach(project: project)
+    }
+
+    @ViewBuilder
+    private var errorMessage: some View {
+        if let error = project.errorMessage {
+            Text(error)
+                .foregroundStyle(.red)
+                .padding(6)
         }
-        .onChange(of: project.tracks.count) { _, _ in timelineEngine.rebuildGraph() }
-        .onChange(of: project.mixStateRevision) { _, _ in timelineEngine.syncMixState() }
-        .onChange(of: project.bpm) { _, _ in timelineEngine.refreshPlaybackSchedule() }
-        .onChange(of: project.playbackMetronomeEnabled) { _, _ in timelineEngine.refreshMetronomeSettings() }
-        .onChange(of: project.metronomeVolume) { _, _ in timelineEngine.refreshMetronomeSettings() }
-        .onChange(of: project.timeSignature) { _, _ in timelineEngine.refreshMetronomeSettings() }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaAddAudioTrack)) { _ in
-            addAudioTrack()
+    }
+
+    private var workspace: some View {
+        HStack(spacing: 0) {
+            timeline
+            sidePanel
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaOpenDocument)) { notification in
-            if let url = notification.userInfo?["url"] as? URL {
-                if url.pathExtension.lowercased() == "remixa" {
-                    openProject(at: url)
-                } else {
-                    project.addTrackOrFillFirstEmpty(named: url.deletingPathExtension().lastPathComponent, audioURL: url)
-                }
+    }
+
+    private var timeline: some View {
+        TimelineView(engine: timelineEngine)
+            .environmentObject(project)
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                handleDropOnEmptyArea(providers: providers)
             }
+    }
+
+    @ViewBuilder
+    private var sidePanel: some View {
+        if showClipInspector {
+            Divider()
+            clipInspector
+        } else if showAIPanel {
+            Divider()
+            AIAssistantPanel()
+                .frame(width: 340)
+                .transition(.move(edge: .trailing))
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaSaveProject)) { _ in
-            saveProject(saveAs: false)
+    }
+
+    @ViewBuilder
+    private var clipInspector: some View {
+        if let (clip, track) = selectedClipAndTrack() {
+            ClipInspectorView(project: project, track: track, clip: clip, timelineEngine: timelineEngine)
+                .frame(width: 280)
+                .id(clip.id)
+        } else {
+            emptyInspector
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaSaveProjectAs)) { _ in
-            saveProject(saveAs: true)
+    }
+
+    private var emptyInspector: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text("クリップを選択すると、ここで詳細を編集できます")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaOpenProject)) { _ in
-            openProjectPanel()
+        .padding(24)
+        .frame(width: 280)
+        .frame(maxHeight: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func sheetView(for sheet: ContentSheet) -> some View {
+        switch sheet {
+        case .export:
+            TimelineExportView(project: project)
+        case .shortcuts:
+            KeyboardShortcutsView()
+                .frame(width: 460, height: 470)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaNewProject)) { _ in
-            newProjectFromUI()
+    }
+
+    private func openDocument(from notification: Notification) {
+        guard let url = notification.userInfo?["url"] as? URL else { return }
+        if url.pathExtension.lowercased() == "remixa" {
+            openProject(at: url)
+        } else {
+            project.addTrackOrFillFirstEmpty(named: url.deletingPathExtension().lastPathComponent, audioURL: url)
         }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .export:
-                TimelineExportView(project: project)
-            case .shortcuts:
-                KeyboardShortcutsView()
-                    .frame(width: 460, height: 470)
-            }
+    }
+
+    private func toggleInspector() {
+        withAnimation {
+            showClipInspector.toggle()
+            if showClipInspector { showAIPanel = false }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaToggleInspector)) { _ in
-            withAnimation {
-                showClipInspector.toggle()
-                if showClipInspector { showAIPanel = false }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .remixaShowShortcuts)) { _ in
-            activeSheet = .shortcuts
-        }
-        .background(KeyEventHandlingView(onSpace: { timelineEngine.togglePlayPause() }))
-        .background(StemSeparationFlow())
     }
 
     private var toolbar: some View {
@@ -148,34 +203,52 @@ struct ContentView: View {
 
     private func toolbarContent(compact: Bool, showVolume: Bool) -> some View {
         HStack {
+            fileToolbarButtons(compact: compact)
+            Spacer(minLength: 8)
+            projectTitle
+            Spacer(minLength: 8)
+            if showVolume { volumeControl }
+            projectToolbarButtons(compact: compact)
+        }
+    }
+
+    private func fileToolbarButtons(compact: Bool) -> some View {
+        Group {
             toolbarButton("音声を追加", "waveform.badge.plus", compact: compact) { addAudioTrack() }
             toolbarButton("プロジェクトを開く", "folder", compact: compact) { openProjectPanel() }
             toolbarButton("保存", "square.and.arrow.down", compact: compact) { saveProject(saveAs: false) }
-            Spacer(minLength: 8)
-            HStack(spacing: 4) {
-                Text(project.fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if project.isDirty {
-                    Text("•").foregroundStyle(.orange)
-                }
+        }
+    }
+
+    private var projectTitle: some View {
+        HStack(spacing: 4) {
+            Text(project.fileURL?.deletingPathExtension().lastPathComponent ?? "無題のプロジェクト")
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if project.isDirty {
+                Text("•").foregroundStyle(.orange)
             }
-            .layoutPriority(-1)
-            Spacer(minLength: 8)
-            if showVolume {
-                HStack(spacing: 4) {
-                    Image(systemName: "speaker.wave.3")
-                    Slider(
-                        value: Binding(get: { project.masterVolume }, set: { project.setMasterVolume($0) }),
-                        in: 0...1.5,
-                        onEditingChanged: { editing in
-                            if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
-                        }
-                    )
-                        .frame(width: 100)
+        }
+        .layoutPriority(-1)
+    }
+
+    private var volumeControl: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "speaker.wave.3")
+            Slider(
+                value: Binding(get: { project.masterVolume }, set: { project.setMasterVolume($0) }),
+                in: 0...1.5,
+                onEditingChanged: { editing in
+                    if editing { project.beginUndoCoalescing() } else { project.endUndoCoalescing() }
                 }
-            }
+            )
+            .frame(width: 100)
+        }
+    }
+
+    private func projectToolbarButtons(compact: Bool) -> some View {
+        Group {
             toolbarButton("ミックスを書き出し", "square.and.arrow.up", compact: compact) { activeSheet = .export }
                 .disabled(project.projectDuration <= 0)
             toolbarButton("パート分離", "waveform.and.mic", compact: compact) {
@@ -191,10 +264,7 @@ struct ContentView: View {
                 }
             }
             toolbarButton("インスペクタ", "sidebar.right", compact: compact) {
-                withAnimation {
-                    showClipInspector.toggle()
-                    if showClipInspector { showAIPanel = false }
-                }
+                toggleInspector()
             }
         }
     }
@@ -349,106 +419,135 @@ private struct TransportBar: View {
         Binding(get: { project.projectKey }, set: { project.setProjectKey($0) })
     }
 
+    private var loopBinding: Binding<Bool> {
+        Binding(
+            get: { project.loopRegion != nil },
+            set: { enabled in
+                if enabled {
+                    let barLength = 60.0 / max(1, project.bpm) * Double(project.beatsPerBar)
+                    let start = max(0, engine.currentTime)
+                    project.loopRegion = start...(start + barLength)
+                } else {
+                    project.loopRegion = nil
+                }
+            }
+        )
+    }
+
+    private var metronomeBinding: Binding<Bool> {
+        Binding(
+            get: { project.playbackMetronomeEnabled },
+            set: { project.setMetronomeSettings(playbackEnabled: $0) }
+        )
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 4) {
-                transportButton("先頭へ", icon: "backward.end.fill") {
-                    NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
-                }
-                transportButton(engine.isPlaying ? "一時停止" : "再生", icon: engine.isPlaying ? "pause.fill" : "play.fill", prominent: true) {
-                    engine.togglePlayPause()
-                }
-                transportButton("停止", icon: "stop.fill") {
-                    engine.stop()
-                    NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
-                }
-            }
-
-            Toggle(isOn: Binding(
-                get: { project.loopRegion != nil },
-                set: { enabled in
-                    if enabled {
-                        let barLength = 60.0 / max(1, project.bpm) * Double(project.beatsPerBar)
-                        let start = max(0, engine.currentTime)
-                        project.loopRegion = start...(start + barLength)
-                    } else {
-                        project.loopRegion = nil
-                    }
-                }
-            )) {
-                Image(systemName: "repeat")
-            }
-            .toggleStyle(.button)
-            .tint(project.loopRegion == nil ? .secondary : .orange)
-            .help("ループ再生")
-
-            Toggle(isOn: Binding(
-                get: { project.playbackMetronomeEnabled },
-                set: { project.setMetronomeSettings(playbackEnabled: $0) }
-            )) {
-                Image(systemName: "metronome")
-            }
-            .toggleStyle(.button)
-            .tint(project.playbackMetronomeEnabled ? .orange : .secondary)
-            .help("再生時のメトロノーム")
-
-            Button {
-                usesBarsPosition.toggle()
-            } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(usesBarsPosition ? "小節.拍.tick" : "分:秒")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                    Text(usesBarsPosition ? barsPosition(engine.currentTime) : secondsPosition(engine.currentTime))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                }
-                .frame(width: 92, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-            .help("クリックして小節表示と時間表示を切り替え")
-
+            playbackControls
+            loopToggle
+            metronomeToggle
+            positionDisplay
             Divider().frame(height: 26)
-
-            HStack(spacing: 5) {
-                Text("BPM").font(.caption).foregroundStyle(.secondary)
-                TextField("BPM", value: bpmBinding, format: .number.precision(.fractionLength(0...1)))
-                    .frame(width: 54)
-                    .textFieldStyle(.roundedBorder)
-                    .help("プロジェクトのテンポ (20〜400 BPM)")
-            }
-
-            Menu {
-                Picker("拍子", selection: signatureBinding) {
-                    ForEach(TimeSignature.allCases) { signature in
-                        Text(signature.rawValue).tag(signature)
-                    }
-                }
-            } label: {
-                Label(project.timeSignature.rawValue, systemImage: "music.note")
-                    .lineLimit(1)
-            }
-            .help("拍子")
-
-            Menu {
-                Picker("プロジェクトのキー", selection: keyBinding) {
-                    Text("未設定").tag(nil as MusicalKey?)
-                    ForEach(MusicalKey.all) { key in
-                        Text(key.displayName).tag(Optional(key))
-                    }
-                }
-            } label: {
-                Label(project.projectKey?.name ?? "キー未設定", systemImage: "music.note.list")
-                    .lineLimit(1)
-            }
-            .help("プロジェクトのキー")
+            bpmControl
+            timeSignatureMenu
+            keyMenu
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 4) {
+            transportButton("先頭へ", icon: "backward.end.fill") {
+                NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
+            }
+            transportButton(engine.isPlaying ? "一時停止" : "再生", icon: engine.isPlaying ? "pause.fill" : "play.fill", prominent: true) {
+                engine.togglePlayPause()
+            }
+            transportButton("停止", icon: "stop.fill") {
+                engine.stop()
+                NotificationCenter.default.post(name: .remixaGoToStart, object: nil)
+            }
+        }
+    }
+
+    private var loopToggle: some View {
+        Toggle(isOn: loopBinding) {
+            Image(systemName: "repeat")
+        }
+        .toggleStyle(.button)
+        .tint(project.loopRegion == nil ? .secondary : .orange)
+        .help("ループ再生")
+    }
+
+    private var metronomeToggle: some View {
+        Toggle(isOn: metronomeBinding) {
+            Image(systemName: "metronome")
+        }
+        .toggleStyle(.button)
+        .tint(project.playbackMetronomeEnabled ? .orange : .secondary)
+        .help("再生時のメトロノーム")
+    }
+
+    private var positionDisplay: some View {
+        Button {
+            usesBarsPosition.toggle()
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(usesBarsPosition ? "小節.拍.tick" : "分:秒")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                Text(usesBarsPosition ? barsPosition(engine.currentTime) : secondsPosition(engine.currentTime))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            .frame(width: 92, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .help("クリックして小節表示と時間表示を切り替え")
+    }
+
+    private var bpmControl: some View {
+        HStack(spacing: 5) {
+            Text("BPM").font(.caption).foregroundStyle(.secondary)
+            TextField("BPM", value: bpmBinding, format: .number.precision(.fractionLength(0...1)))
+                .frame(width: 54)
+                .textFieldStyle(.roundedBorder)
+                .help("プロジェクトのテンポ (20〜400 BPM)")
+        }
+    }
+
+    private var timeSignatureMenu: some View {
+        Menu {
+            Picker("拍子", selection: signatureBinding) {
+                ForEach(TimeSignature.allCases) { signature in
+                    Text(signature.rawValue).tag(signature)
+                }
+            }
+        } label: {
+            Label(project.timeSignature.rawValue, systemImage: "music.note")
+                .lineLimit(1)
+        }
+        .help("拍子")
+    }
+
+    private var keyMenu: some View {
+        Menu {
+            Picker("プロジェクトのキー", selection: keyBinding) {
+                Text("未設定").tag(nil as MusicalKey?)
+                ForEach(MusicalKey.all) { key in
+                    Text(key.displayName).tag(Optional(key))
+                }
+            }
+        } label: {
+            Label(project.projectKey?.name ?? "キー未設定", systemImage: "music.note.list")
+                .lineLimit(1)
+        }
+        .help("プロジェクトのキー")
     }
 
     private func transportButton(
@@ -510,29 +609,43 @@ private struct KeyboardShortcutsView: View {
                 .font(.title2.bold())
                 .padding(.bottom, 12)
             Divider()
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(shortcuts.enumerated()), id: \.offset) { row in
-                        HStack {
-                            Text(row.element.0)
-                            Spacer()
-                            Text(row.element.1)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 7)
-                        Divider()
-                    }
-                }
-            }
-            .padding(.top, 4)
-            HStack {
-                Spacer()
-                Button("閉じる") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .padding(.top, 12)
+            shortcutList
+            dismissButton
         }
         .padding(20)
+    }
+
+    private var shortcutList: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(Array(shortcuts.enumerated()), id: \.offset) { row in
+                    shortcutRow(row.element)
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func shortcutRow(_ shortcut: (String, String)) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(shortcut.0)
+                Spacer()
+                Text(shortcut.1)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 7)
+            Divider()
+        }
+    }
+
+    private var dismissButton: some View {
+        HStack {
+            Spacer()
+            Button("閉じる") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.top, 12)
     }
 }
