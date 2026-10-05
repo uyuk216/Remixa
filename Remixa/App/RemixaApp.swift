@@ -55,6 +55,7 @@ struct RemixaApp: App {
                 .environmentObject(project)
                 .environmentObject(timelineEngine)
                 .frame(minWidth: 900, minHeight: 560)
+                .modifier(AppExtrasModifier(project: project, engine: timelineEngine))
                 .onAppear {
                     timelineEngine.attach(project: project)
                     ControlServer.shared.attach(project: project, timelineEngine: timelineEngine)
@@ -110,6 +111,7 @@ struct RemixaApp: App {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandGroup(after: .newItem) {
+                RecentProjectsMenu(project: project)
                 Button("プロジェクトを開く…") {
                     NotificationCenter.default.post(name: .remixaOpenProject, object: nil)
                 }
@@ -160,6 +162,9 @@ struct RemixaApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .option])
             }
             CommandGroup(after: .help) {
+                Button("Remixaの使い方") {
+                    NotificationCenter.default.post(name: .remixaShowGuide, object: nil)
+                }
                 Button("キーボードショートカット") {
                     NotificationCenter.default.post(name: .remixaShowShortcuts, object: nil)
                 }
@@ -208,6 +213,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // app that isn't kept running continuously could go a long time between
         // checks. Force one check in the background on every launch as well.
         updaterController?.updater.checkForUpdatesInBackground()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { AutosaveManager.shared.willTerminate() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

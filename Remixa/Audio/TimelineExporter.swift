@@ -223,6 +223,7 @@ enum TimelineExporter {
         var quietTailFrames: Int64 = 0
 
         while renderedFrames < maximumFramesToRender {
+            try Task.checkCancellation()
             let automationTime = Double(renderedFrames) / renderFormat.sampleRate
             for (index, track) in tracks.enumerated() {
                 Self.applyAutomation(

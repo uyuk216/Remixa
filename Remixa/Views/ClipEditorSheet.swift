@@ -504,7 +504,10 @@ struct ClipInspectorView: View {
 
     private func detectKey() {
         guard let snapshot = project.keyDetectionSnapshot(for: currentClip.id) else { return }
+        let center = ActivityCenter.shared
+        let activityID = center.begin(title: "キーを解析中", progress: nil)
         Task { @MainActor in
+            defer { center.remove(activityID) }
             let result = await Task.detached(priority: .userInitiated) {
                 KeyDetector.estimate(
                     fileURL: snapshot.sourceURL,

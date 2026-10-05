@@ -182,6 +182,7 @@ struct ContentView: View {
     private var toolbar: some View {
         ViewThatFits(in: .horizontal) {
             toolbarContent(compact: false, showVolume: true)
+            toolbarContent(compact: false, showVolume: false)
             toolbarContent(compact: true, showVolume: true)
             toolbarContent(compact: true, showVolume: false)
         }
@@ -190,15 +191,15 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func toolbarButton(_ title: String, _ icon: String, compact: Bool, action: @escaping () -> Void) -> some View {
+    private func toolbarButton(_ title: String, label: String, _ icon: String, compact: Bool, help: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             if compact {
                 Label(title, systemImage: icon).labelStyle(.iconOnly)
             } else {
-                Label(title, systemImage: icon).lineLimit(1).fixedSize()
+                Label(label, systemImage: icon).lineLimit(1).fixedSize()
             }
         }
-        .help(title)
+        .help(help ?? title)
     }
 
     private func toolbarContent(compact: Bool, showVolume: Bool) -> some View {
@@ -214,9 +215,9 @@ struct ContentView: View {
 
     private func fileToolbarButtons(compact: Bool) -> some View {
         Group {
-            toolbarButton("音声を追加", "waveform.badge.plus", compact: compact) { addAudioTrack() }
-            toolbarButton("プロジェクトを開く", "folder", compact: compact) { openProjectPanel() }
-            toolbarButton("保存", "square.and.arrow.down", compact: compact) { saveProject(saveAs: false) }
+            toolbarButton("音声を追加", label: "追加", "waveform.badge.plus", compact: compact) { addAudioTrack() }
+            toolbarButton("プロジェクトを開く", label: "開く", "folder", compact: compact) { openProjectPanel() }
+            toolbarButton("保存", label: "保存", "square.and.arrow.down", compact: compact) { saveProject(saveAs: false) }
         }
     }
 
@@ -249,21 +250,21 @@ struct ContentView: View {
 
     private func projectToolbarButtons(compact: Bool) -> some View {
         Group {
-            toolbarButton("ミックスを書き出し", "square.and.arrow.up", compact: compact) { activeSheet = .export }
+            toolbarButton("ミックスを書き出し", label: "書き出し", "square.and.arrow.up", compact: compact) { activeSheet = .export }
                 .disabled(project.projectDuration <= 0)
-            toolbarButton("パート分離", "waveform.and.mic", compact: compact) {
+            toolbarButton("パート分離", label: "パート分離", "waveform.and.mic", compact: compact, help: project.selectedClipID == nil ? "クリップを選択すると使えます" : "選択中のクリップをパートに分離") {
                 if let clipId = project.selectedClipID {
                     NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clipId])
                 }
             }
             .disabled(project.selectedClipID == nil)
-            toolbarButton("AIアシスタント", "sparkles", compact: compact) {
+            toolbarButton("AIアシスタント", label: "AI", "sparkles", compact: compact) {
                 withAnimation {
                     showAIPanel.toggle()
                     if showAIPanel { showClipInspector = false }
                 }
             }
-            toolbarButton("インスペクタ", "sidebar.right", compact: compact) {
+            toolbarButton("インスペクタ", label: "インスペクタ", "sidebar.right", compact: compact) {
                 toggleInspector()
             }
         }
@@ -452,6 +453,7 @@ private struct TransportBar: View {
             timeSignatureMenu
             keyMenu
             Spacer(minLength: 0)
+            ActivityStrip()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

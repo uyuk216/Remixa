@@ -9,11 +9,6 @@ struct StemSeparationFlow: View {
 
     @State private var pendingClipId: UUID?
     @State private var showInstallSheet = false
-    @State private var showProgressSheet = false
-    @State private var separationProgress: Double = 0
-    @State private var separationMessage: String = ""
-    @State private var separationError: String?
-    @State private var separationTask: Task<Void, Never>?
 
     var body: some View {
         Color.clear
@@ -37,44 +32,26 @@ struct StemSeparationFlow: View {
                     pendingClipId = nil
                 })
             }
-            .sheet(isPresented: $showProgressSheet) {
-                StemProgressSheet(
-                    progress: separationProgress,
-                    message: separationMessage,
-                    errorMessage: separationError,
-                    onCancel: {
-                        separationTask?.cancel()
-                        showProgressSheet = false
-                    },
-                    onDismiss: { showProgressSheet = false }
-                )
-            }
     }
 
     private func startSeparation(clipId: UUID) {
-        separationProgress = 0
-        separationMessage = "準備中…"
-        separationError = nil
-        showProgressSheet = true
-        separationTask = Task {
+        let center = ActivityCenter.shared
+        let activityID = center.begin(title: "パート分離中", detail: "準備中…")
+        let project = self.project
+        let task = Task { @MainActor in
             do {
                 _ = try await project.separateIntoStems(clipId: clipId) { fraction, message in
-                    Task { @MainActor in
-                        separationProgress = fraction
-                        separationMessage = message
-                    }
+                    Task { @MainActor in center.update(activityID, progress: fraction, detail: message) }
                 }
-                await MainActor.run {
-                    showProgressSheet = false
-                }
+                center.finish(activityID, message: "パート分離完了")
             } catch is CancellationError {
-                await MainActor.run { showProgressSheet = false }
+                center.finish(activityID, message: "パート分離をキャンセルしました")
             } catch {
-                await MainActor.run {
-                    separationError = error.localizedDescription
-                }
+                center.remove(activityID)
+                project.errorMessage = "パート分離に失敗しました: \(error.localizedDescription)"
             }
         }
+        center.setCancel(activityID) { task.cancel() }
     }
 }
 

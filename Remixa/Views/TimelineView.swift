@@ -95,29 +95,8 @@ struct TimelineView: View {
                                 .allowsHitTesting(false)
                         }
                         .contentShape(Rectangle())
-                        .overlay {
-                            if project.tracks.allSatisfy({ $0.clips.isEmpty }) {
-                                VStack(spacing: 10) {
-                                    Image(systemName: "waveform.badge.plus")
-                                        .font(.system(size: 34, weight: .light))
-                                        .foregroundStyle(.secondary)
-                                    Text("ミックスを始めましょう")
-                                        .font(.headline)
-                                    Text("ここに音声ファイルをドロップ")
-                                        .foregroundStyle(.secondary)
-                                    Button {
-                                        NotificationCenter.default.post(name: .remixaAddAudioTrack, object: nil)
-                                    } label: {
-                                        Label("ファイルを追加…", systemImage: "plus")
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                }
-                                .padding(24)
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08)))
-                            }
-                        }
                     }
+                    .overlay { emptyGuide }
                     .onChange(of: Int(engine.currentTime * pixelsPerSecond / max(180, Double(viewportWidth) * 0.75))) { _, _ in
                         if engine.isPlaying {
                             horizontalScroller.scroll(toX: CGFloat(engine.currentTime) * pixelsPerSecond, anchor: 0.5)
@@ -165,6 +144,39 @@ struct TimelineView: View {
             }
             Button("キャンセル", role: .cancel) { renamingMarker = nil }
         }
+    }
+
+    /// Guide card centered in the track area, below the ruler and marker row.
+    @ViewBuilder
+    private var emptyGuide: some View {
+        if project.tracks.allSatisfy({ $0.clips.isEmpty }) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: rulerHeight + markerHeight)
+                emptyGuideCard
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var emptyGuideCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "waveform.badge.plus")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("ミックスを始めましょう")
+                .font(.headline)
+            Text("ここに音声ファイルをドロップ")
+                .foregroundStyle(.secondary)
+            Button {
+                NotificationCenter.default.post(name: .remixaAddAudioTrack, object: nil)
+            } label: {
+                Label("ファイルを追加…", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(24)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08)))
     }
 
     @ViewBuilder
@@ -454,7 +466,7 @@ private struct TimeRulerView: View {
                 beatIndex += 1
             }
 
-            let secondLabelStep = niceTimeStep(for: 48 / max(pixelsPerSecond, 0.001))
+            let secondLabelStep = secondLabelStep()
             var second = 0.0
             while second * pixelsPerSecond < Double(size.width) {
                 let x = CGFloat(second * pixelsPerSecond)
@@ -531,12 +543,11 @@ private struct TimeRulerView: View {
         return max(1, Int(factor * magnitude))
     }
 
-    private func niceTimeStep(for minimum: Double) -> Double {
-        let target = max(1, minimum)
-        let magnitude = pow(10, floor(log10(target)))
-        let normalized = target / magnitude
-        let factor: Double = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
-        return factor * magnitude
+    /// Smallest step (seconds) that keeps labels at least 60pt apart.
+    private func secondLabelStep() -> Double {
+        let candidates: [Double] = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]
+        let minimum = 60 / max(pixelsPerSecond, 0.001)
+        return candidates.first(where: { $0 >= minimum }) ?? 3600
     }
 }
 

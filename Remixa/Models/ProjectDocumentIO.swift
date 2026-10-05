@@ -20,7 +20,7 @@ enum ProjectDocumentIO {
     private static let audioDirName = "Audio"
 
     @MainActor
-    static func save(_ project: RemixaProject, to url: URL) throws {
+    static func save(_ project: RemixaProject, to url: URL, updateProjectState: Bool = true) throws {
         let fm = FileManager.default
         let parentURL = url.deletingLastPathComponent()
         try fm.createDirectory(at: parentURL, withIntermediateDirectories: true)
@@ -155,6 +155,7 @@ enum ProjectDocumentIO {
         for track in project.tracks {
             track.clips = updatedClipsByTrackID[track.id] ?? track.clips
         }
+        guard updateProjectState else { return }
         project.fileURL = url
         project.invalidateAudioCaches()
         project.isDirty = false

@@ -2,11 +2,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AVFoundation
 
-@MainActor
-private final class TimelineExportProgress: ObservableObject {
-    @Published var value = 0.0
-}
-
 /// Offline export controls for the multitrack arrangement.
 struct TimelineExportView: View {
     @ObservedObject var project: RemixaProject
@@ -16,7 +11,6 @@ struct TimelineExportView: View {
     @State private var wavEncoding: TimelineExporter.WAVEncoding = .pcm24
     @State private var m4aQuality: TimelineExporter.M4AQuality = .kbps256
     @State private var exportMode: ExportMode = .mix
-    @StateObject private var exportProgress = TimelineExportProgress()
     @State private var isExporting = false
     @State private var errorMessage: String?
     @State private var didFinish = false
@@ -101,12 +95,6 @@ struct TimelineExportView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if isExporting {
-                ProgressView(value: exportProgress.value)
-                Text("\(Int(exportProgress.value * 100))%")
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .font(.caption.monospacedDigit())
-            }
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(.red).font(.caption)
             }
@@ -173,33 +161,39 @@ struct TimelineExportView: View {
         )
 
         isExporting = true
-        exportProgress.value = 0
         errorMessage = nil
         didFinish = false
 
-        let progressModel = exportProgress
-        Task { @MainActor in
+        let center = ActivityCenter.shared
+        let activityID = center.begin(title: mode == .mix ? "書き出し中" : "トラック別書き出し中")
+        let project = self.project
+        let task = Task { @MainActor in
             do {
                 switch mode {
                 case .mix:
                     try await TimelineExporter.export(
                         tracks: infos, masterVolume: masterVolume, totalDuration: duration,
                         format: fmt, destination: destination, options: options,
-                        progress: { p in Task { @MainActor in progressModel.value = p } }
+                        progress: { p in Task { @MainActor in center.update(activityID, progress: p) } }
                     )
                 case .stems:
                     try await TimelineExporter.exportStems(
                         tracks: infos, totalDuration: duration, format: fmt,
                         directory: destination, options: options,
-                        progress: { p in Task { @MainActor in progressModel.value = p } }
+                        progress: { p in Task { @MainActor in center.update(activityID, progress: p) } }
                     )
                 }
-                isExporting = false
-                didFinish = true
+                center.finish(activityID, message: "書き出し完了")
+            } catch is CancellationError {
+                if mode == .mix { try? FileManager.default.removeItem(at: destination) }
+                center.finish(activityID, message: "書き出しをキャンセルしました")
             } catch {
-                isExporting = false
-                errorMessage = "書き出しに失敗しました: \(error.localizedDescription)"
+                center.remove(activityID)
+                project.errorMessage = "書き出しに失敗しました: \(error.localizedDescription)"
             }
         }
+        center.setCancel(activityID) { task.cancel() }
+        // Run in the background: close the sheet so progress shows in the transport bar.
+        dismiss()
     }
 }

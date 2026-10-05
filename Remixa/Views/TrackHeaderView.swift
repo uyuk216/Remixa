@@ -28,49 +28,11 @@ struct TrackHeaderView: View {
     @State private var isRenaming = false
     @State private var draftName = ""
     @State private var showEffects = false
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Circle()
-                    .fill(TrackColorPalette.color(for: track.colorIndex))
-                    .frame(width: 8, height: 8)
-                if isRenaming {
-                    TextField("トラック名", text: $draftName, onCommit: {
-                        project.rename(track, to: draftName.isEmpty ? track.name : draftName)
-                        isRenaming = false
-                    })
-                    .textFieldStyle(.roundedBorder)
-                    .font(.callout)
-                } else {
-                    Text(track.name)
-                        .font(.callout.bold())
-                        .lineLimit(1)
-                        .onTapGesture(count: 2) {
-                            draftName = track.name
-                            isRenaming = true
-                        }
-                }
-                Spacer()
-                Menu {
-                    Picker("クリップの色", selection: Binding(
-                        get: { track.colorIndex },
-                        set: { project.updateTrack(track, colorIndex: $0) }
-                    )) {
-                        ForEach(0..<Track.colorCount, id: \.self) { index in
-                            Label(TrackColorPalette.items[index].name, systemImage: "circle.fill")
-                                .foregroundStyle(TrackColorPalette.color(for: index))
-                                .tag(index)
-                        }
-                    }
-                    Divider()
-                    Button("トラック削除", role: .destructive) { project.deleteTrack(track) }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .frame(width: 18)
-            }
+            nameRow
 
             HStack(spacing: 6) {
                 Toggle("M", isOn: Binding(
@@ -121,6 +83,96 @@ struct TrackHeaderView: View {
             }
         }
         .padding(8)
+        .contentShape(Rectangle())
+        .contextMenu { trackMenuItems }
+        .dropDestination(for: String.self) { ids, _ in handleDrop(ids) }
+    }
+
+    private var nameRow: some View {
+        HStack {
+            Image(systemName: "line.3.horizontal")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .help("ドラッグでトラックの順番を入れ替え")
+                .draggable(track.id.uuidString)
+            Circle()
+                .fill(TrackColorPalette.color(for: track.colorIndex))
+                .frame(width: 8, height: 8)
+            nameField
+            Spacer()
+            Menu {
+                trackMenuItems
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 18)
+        }
+    }
+
+    @ViewBuilder
+    private var nameField: some View {
+        if isRenaming {
+            TextField("トラック名", text: $draftName)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout)
+                .focused($nameFocused)
+                .onSubmit { commitRename() }
+                .onExitCommand { isRenaming = false }
+                .onChange(of: nameFocused) { _, focused in
+                    if !focused && isRenaming { commitRename() }
+                }
+        } else {
+            Text(track.name)
+                .font(.callout.bold())
+                .lineLimit(1)
+                .onTapGesture(count: 2) { beginRename() }
+        }
+    }
+
+    private func beginRename() {
+        draftName = track.name
+        isRenaming = true
+        nameFocused = true
+    }
+
+    private func commitRename() {
+        guard isRenaming else { return }
+        isRenaming = false
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != track.name {
+            project.rename(track, to: trimmed)
+        }
+    }
+
+    @ViewBuilder
+    private var trackMenuItems: some View {
+        Button("名前を変更") { beginRename() }
+        Picker("色", selection: Binding(
+            get: { track.colorIndex },
+            set: { project.updateTrack(track, colorIndex: $0) }
+        )) {
+            ForEach(0..<Track.colorCount, id: \.self) { index in
+                Label(TrackColorPalette.items[index].name, systemImage: "circle.fill")
+                    .foregroundStyle(TrackColorPalette.color(for: index))
+                    .tag(index)
+            }
+        }
+        Button("複製") { project.duplicateTrack(track) }
+        Button("削除", role: .destructive) { project.deleteTrack(track) }
+        Divider()
+        Button("上へ移動") { project.moveTrack(track, by: -1) }
+            .disabled(project.tracks.first?.id == track.id)
+        Button("下へ移動") { project.moveTrack(track, by: 1) }
+            .disabled(project.tracks.last?.id == track.id)
+    }
+
+    private func handleDrop(_ ids: [String]) -> Bool {
+        guard let raw = ids.first, let id = UUID(uuidString: raw),
+              let source = project.tracks.first(where: { $0.id == id }),
+              source.id != track.id else { return false }
+        project.moveTrack(source, onto: track)
+        return true
     }
 }
 

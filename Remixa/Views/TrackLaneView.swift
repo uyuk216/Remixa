@@ -27,6 +27,7 @@ struct TrackLaneView: View {
                     pixelsPerSecond: pixelsPerSecond,
                     laneHeight: height,
                     isSelected: project.selectedClipIDs.contains(clip.id),
+                    playhead: playhead,
                     onDoubleTap: { onDoubleTapClip(clip) }
                 )
                 .environmentObject(project)
@@ -107,6 +108,7 @@ private struct ClipView: View {
     let pixelsPerSecond: Double
     let laneHeight: CGFloat
     let isSelected: Bool
+    let playhead: Double
     let onDoubleTap: () -> Void
 
     @State private var dragOffsetSeconds: Double = 0
@@ -193,28 +195,29 @@ private struct ClipView: View {
                     project.moveSelectedClips(by: delta)
                 }
         )
-        .contextMenu {
-            Button("テンポ/BPMを編集…") { onDoubleTap() }
-            Menu("音源内容をナッジ") {
-                Button("前へ 10 ms") { project.nudgeClipContent(clip, on: track, by: -0.01) }
-                Button("後ろへ 10 ms") { project.nudgeClipContent(clip, on: track, by: 0.01) }
-                Divider()
-                Button("前へ 1 拍") { project.nudgeClipContent(clip, on: track, by: -60.0 / max(project.bpm, 1)) }
-                Button("後ろへ 1 拍") { project.nudgeClipContent(clip, on: track, by: 60.0 / max(project.bpm, 1)) }
-            }
-            Divider()
-            Button("複製") {
-                if !project.selectedClipIDs.contains(clip.id) { project.selectClip(clip.id) }
-                project.duplicateSelectedClips()
-            }
-            Button("パート分離…") {
-                NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clip.id])
-            }
-            Button("削除", role: .destructive) {
-                if !project.selectedClipIDs.contains(clip.id) { project.selectClip(clip.id) }
-                project.deleteSelectedClips()
-            }
+        .contextMenu { clipMenu }
+    }
+
+    @ViewBuilder
+    private var clipMenu: some View {
+        Button("分割") { project.splitClip(clip, on: track, at: playhead) }
+        Button("複製") { project.duplicateClip(clip, on: track) }
+        Button("削除", role: .destructive) { project.deleteClip(clip, on: track) }
+        Divider()
+        Button("パート分離") {
+            NotificationCenter.default.post(name: .remixaSeparateStems, object: nil, userInfo: ["clipId": clip.id])
         }
+        Button("BPMに合わせる") { run { try project.syncClipTempo(clipId: clip.id) } }
+        Button("キーを合わせる") { run { try project.matchClipToProjectKey(clipID: clip.id) } }
+        Divider()
+        Button("インスペクタで開く") {
+            project.selectClip(clip.id)
+            NotificationCenter.default.post(name: .remixaToggleInspector, object: nil)
+        }
+    }
+
+    private func run(_ action: () throws -> Void) {
+        do { try action() } catch { project.errorMessage = error.localizedDescription }
     }
 
     private var changeBadge: String {
