@@ -166,7 +166,7 @@ struct TimelineExportView: View {
 
         let center = ActivityCenter.shared
         let activityID = center.begin(title: mode == .mix ? "書き出し中" : "トラック別書き出し中")
-        let project = self.project
+        let exportProject = self.project
         let task = Task { @MainActor in
             do {
                 switch mode {
@@ -189,7 +189,7 @@ struct TimelineExportView: View {
                 center.finish(activityID, message: "書き出しをキャンセルしました")
             } catch {
                 center.remove(activityID)
-                project.errorMessage = "書き出しに失敗しました: \(error.localizedDescription)"
+                exportProject.errorMessage = "書き出しに失敗しました: \(error.localizedDescription)"
             }
         }
         center.setCancel(activityID) { task.cancel() }
