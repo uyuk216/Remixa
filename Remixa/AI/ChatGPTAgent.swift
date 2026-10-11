@@ -218,13 +218,23 @@ actor ChatGPTAgent {
         let tools = ChatGPTToolConverter.functionTools(fromMCP: listed["tools"]?.arrayValue ?? [])
 
         let model = try await ChatGPTAuth.shared.resolveModel()
+        var effort = await ChatGPTAuth.shared.effectiveReasoningEffort(model: model)
         var working = history
         working.append(["role": "user", "content": .string(prompt)])
 
         for _ in 0..<Self.maxTurns {
             try Task.checkCancellation()
             let token = try await ChatGPTAuth.shared.validAccessToken()
-            let turn = try await Self.streamTurn(accessToken: token, model: model, input: working, tools: tools, onOutput: onOutput)
+            let turn: TurnResult
+            do {
+                turn = try await Self.streamTurn(accessToken: token, model: model, input: working, tools: tools,
+                                                 effort: effort, onOutput: onOutput)
+            } catch let error as ChatGPTError where error.code == "http_400" && effort != nil {
+                // モデルが思考量に非対応: reasoning なしで1回だけ再試行
+                effort = nil
+                turn = try await Self.streamTurn(accessToken: token, model: model, input: working, tools: tools,
+                                                 effort: nil, onOutput: onOutput)
+            }
             if !turn.text.isEmpty {
                 working.append(["role": "assistant", "content": .string(turn.text)])
             }
@@ -256,7 +266,7 @@ actor ChatGPTAgent {
 
     // MARK: request
 
-    static func requestBody(model: String, input: [JSONValue], tools: [JSONValue]) -> JSONValue {
+    static func requestBody(model: String, input: [JSONValue], tools: [JSONValue], effort: String? = nil) -> JSONValue {
         var body: [String: JSONValue] = [
             "model": .string(model),
             "input": .array(input),
@@ -265,11 +275,12 @@ actor ChatGPTAgent {
             "stream": true
         ]
         if !tools.isEmpty { body["tools"] = .array(tools) }
+        if let effort { body["reasoning"] = ["effort": .string(effort)] }
         return .object(body)
     }
 
     static func streamTurn(
-        accessToken: String, model: String, input: [JSONValue], tools: [JSONValue],
+        accessToken: String, model: String, input: [JSONValue], tools: [JSONValue], effort: String? = nil,
         onOutput: @escaping @MainActor @Sendable (String) -> Void
     ) async throws -> TurnResult {
         var request = URLRequest(url: responsesURL)
@@ -278,7 +289,7 @@ actor ChatGPTAgent {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = requestBody(model: model, input: input, tools: tools).serialized()
+        request.httpBody = requestBody(model: model, input: input, tools: tools, effort: effort).serialized()
 
         let bytes: URLSession.AsyncBytes
         let response: URLResponse

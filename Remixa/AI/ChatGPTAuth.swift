@@ -16,7 +16,27 @@ struct ChatGPTError: LocalizedError, Sendable {
 struct ChatGPTModel: Identifiable, Hashable, Sendable {
     let slug: String
     let displayName: String
+    /// Reasoning efforts the model advertises. `nil` = unknown (show all), empty = unsupported.
+    var reasoningLevels: [String]? = nil
     var id: String { slug }
+
+    static let baseEfforts = ["minimal", "low", "medium", "high"]
+
+    /// Efforts to offer in the UI for this model (empty = hide the picker).
+    var selectableEfforts: [String] {
+        guard let levels = reasoningLevels else { return Self.baseEfforts }
+        return Self.baseEfforts.filter(levels.contains) + levels.filter { !Self.baseEfforts.contains($0) }
+    }
+
+    static func effortLabel(_ effort: String) -> String {
+        switch effort {
+        case "minimal": return "最小"
+        case "low": return "低"
+        case "medium": return "中"
+        case "high": return "高"
+        default: return effort
+        }
+    }
 }
 
 /// Minimal Sendable JSON tree (avoids passing `[String: Any]` across isolation domains).
@@ -89,6 +109,7 @@ struct ChatGPTStoredState: Codable, Sendable {
     var scopes: [String] = []
     var selectedModel: String?
     var welcomeShown: Bool?
+    var reasoningEffort: String?
 }
 
 struct ChatGPTCredentials: Codable, Sendable {
@@ -568,6 +589,7 @@ final class ChatGPTAuth: ObservableObject {
     @Published private(set) var selectedModel: String?
     @Published private(set) var lastError: String?
     @Published private(set) var showWelcome = false
+    @Published private(set) var reasoningEffort: String?
     @Published private(set) var usageLimitReached = false
 
     private struct Discovery: Sendable {
@@ -596,6 +618,7 @@ final class ChatGPTAuth: ObservableObject {
         email = state.email
         planAvailable = credentials != nil && state.scopes.contains(ChatGPTOAuth.sharingScope)
         selectedModel = state.selectedModel
+        reasoningEffort = state.reasoningEffort
     }
 
     // MARK: discovery
@@ -865,6 +888,20 @@ final class ChatGPTAuth: ObservableObject {
         publish()
     }
 
+    /// nil = auto (reasoning not sent).
+    func selectReasoningEffort(_ effort: String?) {
+        state.reasoningEffort = effort
+        ChatGPTStore.saveState(state)
+        publish()
+    }
+
+    /// The effort to actually send for `model`, or nil when auto / unsupported.
+    func effectiveReasoningEffort(model: String) -> String? {
+        guard let effort = state.reasoningEffort else { return nil }
+        if let info = models.first(where: { $0.slug == model }), !info.selectableEfforts.contains(effort) { return nil }
+        return effort
+    }
+
     func reloadModels() {
         guard isSignedIn, modelsTask == nil else { return }
         modelsTask = Task { [weak self] in
@@ -904,9 +941,18 @@ final class ChatGPTAuth: ObservableObject {
         for model in list where model["visibility"]?.stringValue == "list" {
             guard let slug = model["slug"]?.stringValue, !slug.trimmingCharacters(in: .whitespaces).isEmpty, slug.count <= 200,
                   let name = model["display_name"]?.stringValue, !name.trimmingCharacters(in: .whitespaces).isEmpty, name.count <= 200 else { return nil }
-            result.append(ChatGPTModel(slug: slug, displayName: name))
+            result.append(ChatGPTModel(slug: slug, displayName: name, reasoningLevels: parseReasoningLevels(model)))
         }
         return result
+    }
+
+    /// Accepts string or object entries (`effort` / `id` / `slug`); nil when the model lists nothing.
+    nonisolated static func parseReasoningLevels(_ model: JSONValue) -> [String]? {
+        let keys = ["supported_reasoning_levels", "supported_reasoning_efforts"]
+        guard let list = keys.lazy.compactMap({ model[$0]?.arrayValue }).first else { return nil }
+        return list.compactMap { item in
+            item.stringValue ?? item["effort"]?.stringValue ?? item["id"]?.stringValue ?? item["slug"]?.stringValue
+        }
     }
 
     nonisolated static func fetchModels(accessToken: String) async throws -> [ChatGPTModel] {

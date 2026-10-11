@@ -59,10 +59,6 @@ private struct SigningInSection: View {
 private struct SignedInSection: View {
     @ObservedObject var auth: ChatGPTAuth
 
-    private var modelBinding: Binding<String> {
-        Binding(get: { auth.selectedModel ?? "" }, set: { auth.selectModel($0) })
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -77,14 +73,7 @@ private struct SignedInSection: View {
             Text(auth.planAvailable ? "プランの利用: 可能" : "プランの利用: 不可(サインインし直してください)")
                 .font(.caption2)
                 .foregroundStyle(auth.planAvailable ? Color.secondary : Color.orange)
-            if !auth.models.isEmpty {
-                Picker("モデル", selection: modelBinding) {
-                    ForEach(auth.models) { model in
-                        Text(model.displayName).tag(model.slug)
-                    }
-                }
-                .font(.caption)
-            }
+            if !auth.models.isEmpty { ChatGPTModelPickers(auth: auth) }
             if auth.planAvailable { ChatGPTPlanIndicator() }
             HStack {
                 Spacer()
@@ -93,5 +82,40 @@ private struct SignedInSection: View {
             .controlSize(.small)
         }
         .onAppear { auth.reloadModels() }
+    }
+}
+
+private struct ChatGPTModelPickers: View {
+    @ObservedObject var auth: ChatGPTAuth
+
+    private var modelBinding: Binding<String> {
+        Binding(get: { auth.selectedModel ?? "" }, set: { auth.selectModel($0) })
+    }
+
+    private var effortBinding: Binding<String> {
+        Binding(get: { auth.reasoningEffort ?? "" }, set: { auth.selectReasoningEffort($0.isEmpty ? nil : $0) })
+    }
+
+    private var efforts: [String] {
+        auth.models.first(where: { $0.slug == auth.selectedModel })?.selectableEfforts ?? ChatGPTModel.baseEfforts
+    }
+
+    var body: some View {
+        HStack {
+            Picker("モデル", selection: modelBinding) {
+                ForEach(auth.models) { model in
+                    Text(model.displayName).tag(model.slug)
+                }
+            }
+            if !efforts.isEmpty {
+                Picker("思考量", selection: effortBinding) {
+                    Text("自動").tag("")
+                    ForEach(efforts, id: \.self) { effort in
+                        Text(ChatGPTModel.effortLabel(effort)).tag(effort)
+                    }
+                }
+            }
+        }
+        .font(.caption)
     }
 }
