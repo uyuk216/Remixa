@@ -163,6 +163,14 @@ args = ["mcp"]
 
 Remixa アプリ自体にも AI アシスタント機能があり、アプリ内のチャットからこれと同じ操作（トラック追加、BPM 変更、エフェクト調整、書き出しなど）を指示できます。`remixa mcp` / `remixa call` は同じ制御ソケットを外部の AI エージェント（Claude Code や Codex）から利用するための窓口です。
 
+#### ChatGPT でサインインして使う
+
+アシスタントのバックエンドには、Claude Code / Codex に加えて **ChatGPT**（Sign in with ChatGPT）を選べます。CLI のインストールは不要で、パネルの「ChatGPTで続ける」からブラウザでサインインすると、お使いの ChatGPT プラン（Plus/Pro など）の利用枠で AI アシスタントが動きます。
+
+- サインイン後はパネルでモデルを選べます。「使用量を管理」から <https://chatgpt.com/settings/usage> を開けます。
+- アクセストークンは macOS のキーチェーンに保存されます。「サインアウト」でトークンを失効・削除します。
+- 利用上限に達した場合はエラーを表示します（自動リトライはしません）。
+
 ## アップデート
 
 Remixa は起動時に自動的にアップデートを確認します（[Sparkle](https://sparkle-project.org/) を使用）。メニューの「Remixa」→「アップデートを確認…」からも手動で確認できます。

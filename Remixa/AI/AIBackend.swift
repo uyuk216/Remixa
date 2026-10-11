@@ -4,6 +4,7 @@ import Foundation
 enum AIBackendKind: String, CaseIterable, Identifiable, Hashable {
     case claude
     case codex
+    case chatgpt
 
     var id: String { rawValue }
 
@@ -11,14 +12,20 @@ enum AIBackendKind: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .claude: return "Claude Code"
         case .codex: return "Codex"
+        case .chatgpt: return "ChatGPT"
         }
     }
 
     /// The CLI executable's file name, as it would appear on `PATH`.
     var executableName: String { rawValue }
 
+    /// ChatGPT talks to the API directly (Sign in with ChatGPT); no CLI is needed.
+    var requiresCLI: Bool { self != .chatgpt }
+
     var installHint: String {
         switch self {
+        case .chatgpt:
+            return "ChatGPTにサインインしてください。"
         case .claude:
             return "claude コマンドが見つかりません。npm install -g @anthropic-ai/claude-code などでインストールしてください。"
         case .codex:

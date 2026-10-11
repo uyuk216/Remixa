@@ -6,6 +6,7 @@ import SwiftUI
 struct AIAssistantPanel: View {
     @AppStorage("aiBackendKind") private var backendRaw: String = AIBackendKind.claude.rawValue
     @StateObject private var runner = AIAssistantRunner()
+    @ObservedObject private var chatGPT = ChatGPTAuth.shared
 
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
@@ -13,6 +14,9 @@ struct AIAssistantPanel: View {
 
     private var backend: AIBackendKind { AIBackendKind(rawValue: backendRaw) ?? .claude }
     private var backendPath: String? { resolvedPaths[backend] }
+    private var isBackendReady: Bool {
+        backend == .chatgpt ? (chatGPT.isSignedIn && chatGPT.planAvailable) : backendPath != nil
+    }
 
     struct ChatMessage: Identifiable {
         let id = UUID()
@@ -44,7 +48,9 @@ struct AIAssistantPanel: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            if let backendPath {
+            if backend == .chatgpt {
+                ChatGPTAccountView(auth: chatGPT)
+            } else if let backendPath {
                 Text(backendPath)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -139,11 +145,11 @@ struct AIAssistantPanel: View {
     private var canSend: Bool {
         !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !runner.isRunning
-            && backendPath != nil
+            && isBackendReady
     }
 
     private func refreshAvailability() {
-        for kind in AIBackendKind.allCases {
+        for kind in AIBackendKind.allCases where kind.requiresCLI {
             if let path = AIBackendLocator.resolve(kind) {
                 resolvedPaths[kind] = path
             } else {
@@ -154,12 +160,26 @@ struct AIAssistantPanel: View {
 
     private func send() {
         let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, let executablePath = backendPath else { return }
+        guard !prompt.isEmpty, isBackendReady else { return }
         inputText = ""
 
         messages.append(ChatMessage(role: .user, text: prompt))
         messages.append(ChatMessage(role: .assistant, text: ""))
         let assistantID = messages[messages.count - 1].id
+
+        let finish: @MainActor @Sendable (Int32) -> Void = { code in
+            if code != 0, code != -15, backend != .chatgpt { // -15 == SIGTERM (user cancel)
+                messages.append(ChatMessage(role: .system, text: "プロセスが終了しました (code \(code))"))
+            }
+        }
+
+        if backend == .chatgpt {
+            runner.runChatGPT(prompt: prompt, onOutput: { chunk in
+                appendToMessage(id: assistantID, chunk: chunk)
+            }, onFinish: finish)
+            return
+        }
+        guard let executablePath = backendPath else { return }
 
         let systemContext = """
         あなたはRemixa(macOS用DAWアプリ)をMCPツール経由で操作するアシスタントです。\
@@ -171,11 +191,7 @@ struct AIAssistantPanel: View {
 
         runner.run(backend: backend, executablePath: executablePath, prompt: fullPrompt, onOutput: { chunk in
             appendToMessage(id: assistantID, chunk: chunk)
-        }, onFinish: { code in
-            if code != 0, code != -15 { // -15 == SIGTERM (user cancel)
-                messages.append(ChatMessage(role: .system, text: "プロセスが終了しました (code \(code))"))
-            }
-        })
+        }, onFinish: finish)
     }
 
     private func appendToMessage(id: UUID, chunk: String) {

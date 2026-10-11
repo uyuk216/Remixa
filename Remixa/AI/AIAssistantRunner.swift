@@ -10,6 +10,7 @@ final class AIAssistantRunner: ObservableObject {
 
     private var process: Process?
     private var mcpConfigURL: URL?
+    private var chatGPTTask: Task<Void, Never>?
 
     /// Starts `backend` with `prompt`. `onOutput` is called on the main actor with
     /// each chunk of interleaved stdout/stderr text as it streams in; `onFinish`
@@ -52,6 +53,10 @@ final class AIAssistantRunner: ObservableObject {
                 "--permission-mode", "dontAsk",
                 "--output-format", "text"
             ]
+        case .chatgpt:
+            // CLI不要。パネルは runChatGPT を使う。
+            onFinish(-1)
+            return
         case .codex:
             mcpConfigURL = nil
             process.arguments = [
@@ -112,8 +117,33 @@ final class AIAssistantRunner: ObservableObject {
         }
     }
 
+    /// Runs the ChatGPT backend (Responses API tool loop, no subprocess for the model itself).
+    func runChatGPT(
+        prompt: String,
+        onOutput: @escaping @MainActor @Sendable (String) -> Void,
+        onFinish: @escaping @MainActor @Sendable (Int32) -> Void
+    ) {
+        cancel()
+        isRunning = true
+        chatGPTTask = Task { [weak self] in
+            var code: Int32 = 0
+            do {
+                try await ChatGPTAgent.shared.run(prompt: prompt, onOutput: onOutput)
+            } catch is CancellationError {
+                code = -15
+            } catch {
+                onOutput("\n" + error.localizedDescription)
+                code = 1
+            }
+            self?.isRunning = false
+            self?.chatGPTTask = nil
+            onFinish(code)
+        }
+    }
+
     /// Terminates the currently running process, if any. Safe to call when idle.
     func cancel() {
+        chatGPTTask?.cancel()
         guard let process, process.isRunning else { return }
         process.terminate()
         let pid = process.processIdentifier
