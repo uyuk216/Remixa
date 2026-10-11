@@ -28,19 +28,16 @@ private struct SignedOutSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Text("ChatGPTプランを使う").font(.headline)
+            Text("対象のAIリクエストを、お使いのChatGPTプランまたはクレジットの範囲で実行します。Remixaの利用料とは別です(Remixaは無料)。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text("お使いのChatGPTプラン(Plus/Pro)でAIアシスタントを使えます")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button {
-                auth.signIn()
-            } label: {
-                Label("ChatGPTで続ける", systemImage: "bubble.left.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.black)
-            .controlSize(.large)
+            ContinueWithChatGPTButton { auth.signIn() }
         }
     }
 }
@@ -88,10 +85,8 @@ private struct SignedInSection: View {
                 }
                 .font(.caption)
             }
+            if auth.planAvailable { ChatGPTPlanIndicator() }
             HStack {
-                Button("使用量を管理") {
-                    if let url = URL(string: "https://chatgpt.com/settings/usage") { NSWorkspace.shared.open(url) }
-                }
                 Spacer()
                 Button("サインアウト") { Task { await auth.signOut() } }
             }

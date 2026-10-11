@@ -88,6 +88,7 @@ struct ChatGPTStoredState: Codable, Sendable {
     var subject: String?
     var scopes: [String] = []
     var selectedModel: String?
+    var welcomeShown: Bool?
 }
 
 struct ChatGPTCredentials: Codable, Sendable {
@@ -566,6 +567,8 @@ final class ChatGPTAuth: ObservableObject {
     @Published private(set) var models: [ChatGPTModel] = []
     @Published private(set) var selectedModel: String?
     @Published private(set) var lastError: String?
+    @Published private(set) var showWelcome = false
+    @Published private(set) var usageLimitReached = false
 
     private struct Discovery: Sendable {
         let authorizationEndpoint: URL
@@ -725,7 +728,18 @@ final class ChatGPTAuth: ObservableObject {
             lastError = "このChatGPTアカウントではプランの利用許可(chatgpt.tokens.use.direct)が付与されませんでした。"
         }
         reloadModels()
+        if planAvailable, state.welcomeShown != true { showWelcome = true }
     }
+
+    /// Records that the first-sign-in welcome was shown so it never reappears.
+    func dismissWelcome() {
+        showWelcome = false
+        state.welcomeShown = true
+        ChatGPTStore.saveState(state)
+    }
+
+    func reportUsageLimit() { usageLimitReached = true }
+    func clearUsageLimit() { usageLimitReached = false }
 
     private func verifyIDToken(_ idToken: String, clientId: String, nonce: String?) async throws -> ChatGPTOAuth.Identity {
         guard let jwt = ChatGPTOAuth.decodeJWT(idToken) else {

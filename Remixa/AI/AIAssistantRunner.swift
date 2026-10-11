@@ -132,6 +132,7 @@ final class AIAssistantRunner: ObservableObject {
             } catch is CancellationError {
                 code = -15
             } catch {
+                if (error as? ChatGPTError)?.code == "rate_limited" { ChatGPTAuth.shared.reportUsageLimit() }
                 onOutput("\n" + error.localizedDescription)
                 code = 1
             }

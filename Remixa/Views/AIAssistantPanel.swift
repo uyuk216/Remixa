@@ -30,8 +30,16 @@ struct AIAssistantPanel: View {
             header
             Divider()
             transcript
+            if chatGPT.usageLimitReached && backend == .chatgpt {
+                ChatGPTUsageLimitCard { chatGPT.clearUsageLimit() }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
+            }
             Divider()
             inputArea
+        }
+        .sheet(isPresented: Binding(get: { chatGPT.showWelcome }, set: { if !$0 { chatGPT.dismissWelcome() } })) {
+            ChatGPTWelcomeView { chatGPT.dismissWelcome() }
         }
         .onAppear { refreshAvailability() }
         .onChange(of: backendRaw) { _, _ in refreshAvailability() }
@@ -174,6 +182,7 @@ struct AIAssistantPanel: View {
         }
 
         if backend == .chatgpt {
+            chatGPT.clearUsageLimit()
             runner.runChatGPT(prompt: prompt, onOutput: { chunk in
                 appendToMessage(id: assistantID, chunk: chunk)
             }, onFinish: finish)
