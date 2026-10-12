@@ -44,6 +44,7 @@ struct StemSeparationFlow: View {
                     Task { @MainActor in center.update(activityID, progress: fraction, detail: message) }
                 }
                 center.finish(activityID, message: "パート分離完了")
+                AINotifier.shared.notifyTask("パート分離が完了しました")
             } catch is CancellationError {
                 center.finish(activityID, message: "パート分離をキャンセルしました")
             } catch {

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		046CC90BF64354A2D2A3DAAE /* TrackLaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */; };
+		06CC97FE994FB3C9F650008A /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C13F9F3E095C99B115D90C5 /* ChatStore.swift */; };
 		1496F4243D247F3ED90C7D21 /* TimelineExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */; };
 		1E62ECFD2B48325AB99BDA30 /* AudioDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */; };
 		1EE1CFC68372589279094742 /* JSONHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0688366C616C30695A03178A /* JSONHelpers.swift */; };
@@ -19,12 +20,14 @@
 		32903C496A2DE9FA8FF31029 /* AIAssistantRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62E928164D16D95C51CF525 /* AIAssistantRunner.swift */; };
 		339869EF19D75CDFDCC94D71 /* ChatGPTBrandViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B929FFD0C773965DAB408C77 /* ChatGPTBrandViews.swift */; };
 		3A8C827820CEC1D31313B878 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E01BC02B0DC524332C889FA /* Project.swift */; };
+		3B29F4C392EE340F28D36F8B /* AIProgressStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46536CC3665AB6A9B5CCD56A /* AIProgressStrip.swift */; };
 		3BD6D5BEF9954BD02A83486F /* ChatGPTAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3C34D587D6DAB0D2D312A4 /* ChatGPTAgent.swift */; };
 		3D4AD74B04E21835FB115F09 /* AudioExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 776C82119C39B6D31D0BDC69 /* AudioExporter.swift */; };
 		496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */; };
 		4B01023B34460794BAE49E6D /* SocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A958479F13A5D595DE22C431 /* SocketClient.swift */; };
 		4BA64005DAF6726B50D21C43 /* AppExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC6A63AF6036F7DC33B8628E /* AppExtras.swift */; };
 		4ED2FFD8EBF012B46191840C /* ControlConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E813D3676DA68F21596C10 /* ControlConnection.swift */; };
+		4EF4CC5FE0C972E3E41BCA1B /* AINotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A5A5B61C1234E976172CFF /* AINotifier.swift */; };
 		5055CD4A94520A01E50739FC /* EffectsGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = E961F082D4658EC2E81C50B7 /* EffectsGraph.swift */; };
 		5160269E1C0A30986EBE8EAF /* ControlServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BD5C33C1BAB7077A6BCD0A /* ControlServer.swift */; };
 		5631DC120192D9AC29EB811B /* RemixaCLI in Resources */ = {isa = PBXBuildFile; fileRef = 22020D84CCFB026BD145F5DB /* RemixaCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -35,6 +38,7 @@
 		75BA10ACD1C19953303B7A25 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8574F27DE8A51C130C335C1 /* main.swift */; };
 		7CBC31772F8E33D8782A62A5 /* TimelineEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE269D4477DDA70282EAA35 /* TimelineEngine.swift */; };
 		8012945FAE09D62584B13D26 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85A360B3B18F2E9CB4D5672 /* ContentView.swift */; };
+		823E5F0DABE8D763475A7C68 /* AIChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8399376426274B1F5E53AA5B /* AIChatListView.swift */; };
 		8591C44040D35D50AD57A367 /* ProjectDocumentIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BAC53F22F6813DDF1B32EB /* ProjectDocumentIO.swift */; };
 		859E6043D2CC5C7FC7DBD191 /* AIBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = C26C291AF189C29945A0E29E /* AIBackend.swift */; };
 		8F120F5062EAD1736F6243B8 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B343FADECE68CADAB245E88 /* TimelineView.swift */; };
@@ -76,6 +80,7 @@
 		0FB52E09B488BF139433C046 /* StemEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StemEnvironment.swift; sourceTree = "<group>"; };
 		13754590A106AAAFCE1A319E /* EffectsRackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsRackView.swift; sourceTree = "<group>"; };
 		1792424AA7DA7A32D160807B /* ProjectTrackOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectTrackOps.swift; sourceTree = "<group>"; };
+		1C13F9F3E095C99B115D90C5 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
 		22020D84CCFB026BD145F5DB /* RemixaCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = RemixaCLI; sourceTree = BUILT_PRODUCTS_DIR; };
 		28E813D3676DA68F21596C10 /* ControlConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlConnection.swift; sourceTree = "<group>"; };
 		2C8D2BCFAF1E0F012CC2A31C /* WaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformGenerator.swift; sourceTree = "<group>"; };
@@ -84,6 +89,7 @@
 		38FB67B2D96D4DD954983060 /* TrackHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackHeaderView.swift; sourceTree = "<group>"; };
 		392E38DAD8EBECBA4800EF35 /* ChatGPTAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAuth.swift; sourceTree = "<group>"; };
 		3F4A0DCABAEF9FEDED7FB49F /* TimelineExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineExporter.swift; sourceTree = "<group>"; };
+		46536CC3665AB6A9B5CCD56A /* AIProgressStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProgressStrip.swift; sourceTree = "<group>"; };
 		47B18367CCC6ACEE3F1E4C46 /* AVAudioPCMBuffer+Editing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVAudioPCMBuffer+Editing.swift"; sourceTree = "<group>"; };
 		516CFB7F305482893D941A0B /* TransportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportView.swift; sourceTree = "<group>"; };
 		5793E7CCA9FDE76E56CB5F7E /* AutomationLaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationLaneView.swift; sourceTree = "<group>"; };
@@ -94,6 +100,7 @@
 		776C82119C39B6D31D0BDC69 /* AudioExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioExporter.swift; sourceTree = "<group>"; };
 		7BE6E97D828996024A3136F8 /* ClipEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipEditorSheet.swift; sourceTree = "<group>"; };
 		7DA221965EA58A9B9ACB8930 /* AudioDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDocument.swift; sourceTree = "<group>"; };
+		8399376426274B1F5E53AA5B /* AIChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatListView.swift; sourceTree = "<group>"; };
 		870CB2266F8CF72C322C812D /* RemixaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemixaApp.swift; sourceTree = "<group>"; };
 		8BD6ED9C3E10E6BFB8AF0949 /* ChatGPTAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTAccountView.swift; sourceTree = "<group>"; };
 		94CF1D553D6B3C06BFE3DEF0 /* TrackLaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackLaneView.swift; sourceTree = "<group>"; };
@@ -107,6 +114,7 @@
 		B182F34B5A98FE171BD63ADF /* AIAssistantPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantPanel.swift; sourceTree = "<group>"; };
 		B929FFD0C773965DAB408C77 /* ChatGPTBrandViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatGPTBrandViews.swift; sourceTree = "<group>"; };
 		C26C291AF189C29945A0E29E /* AIBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIBackend.swift; sourceTree = "<group>"; };
+		C6A5A5B61C1234E976172CFF /* AINotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AINotifier.swift; sourceTree = "<group>"; };
 		C8574F27DE8A51C130C335C1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		CC6A63AF6036F7DC33B8628E /* AppExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppExtras.swift; sourceTree = "<group>"; };
 		CDEC93DED112C5871F59C6A4 /* Remixa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Remixa.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -151,6 +159,8 @@
 			children = (
 				EBB7F5A55DF1535784EC5A52 /* ActivityCenter.swift */,
 				B182F34B5A98FE171BD63ADF /* AIAssistantPanel.swift */,
+				8399376426274B1F5E53AA5B /* AIChatListView.swift */,
+				46536CC3665AB6A9B5CCD56A /* AIProgressStrip.swift */,
 				5793E7CCA9FDE76E56CB5F7E /* AutomationLaneView.swift */,
 				8BD6ED9C3E10E6BFB8AF0949 /* ChatGPTAccountView.swift */,
 				B929FFD0C773965DAB408C77 /* ChatGPTBrandViews.swift */,
@@ -229,8 +239,10 @@
 			children = (
 				F62E928164D16D95C51CF525 /* AIAssistantRunner.swift */,
 				C26C291AF189C29945A0E29E /* AIBackend.swift */,
+				C6A5A5B61C1234E976172CFF /* AINotifier.swift */,
 				AE3C34D587D6DAB0D2D312A4 /* ChatGPTAgent.swift */,
 				392E38DAD8EBECBA4800EF35 /* ChatGPTAuth.swift */,
+				1C13F9F3E095C99B115D90C5 /* ChatStore.swift */,
 			);
 			path = AI;
 			sourceTree = "<group>";
@@ -421,6 +433,9 @@
 				30E4772B746A84AE9D523873 /* AIAssistantPanel.swift in Sources */,
 				32903C496A2DE9FA8FF31029 /* AIAssistantRunner.swift in Sources */,
 				859E6043D2CC5C7FC7DBD191 /* AIBackend.swift in Sources */,
+				823E5F0DABE8D763475A7C68 /* AIChatListView.swift in Sources */,
+				4EF4CC5FE0C972E3E41BCA1B /* AINotifier.swift in Sources */,
+				3B29F4C392EE340F28D36F8B /* AIProgressStrip.swift in Sources */,
 				CFC7A743C8A5F0A5444B59A6 /* AVAudioPCMBuffer+Editing.swift in Sources */,
 				910C5F5746097410D63C2008 /* ActivityCenter.swift in Sources */,
 				4BA64005DAF6726B50D21C43 /* AppExtras.swift in Sources */,
@@ -433,6 +448,7 @@
 				3BD6D5BEF9954BD02A83486F /* ChatGPTAgent.swift in Sources */,
 				A26986844D995F86FC23F39C /* ChatGPTAuth.swift in Sources */,
 				339869EF19D75CDFDCC94D71 /* ChatGPTBrandViews.swift in Sources */,
+				06CC97FE994FB3C9F650008A /* ChatStore.swift in Sources */,
 				496CA0F8A62664F2A403A3FC /* ClipEditorSheet.swift in Sources */,
 				8012945FAE09D62584B13D26 /* ContentView.swift in Sources */,
 				4ED2FFD8EBF012B46191840C /* ControlConnection.swift in Sources */,

@@ -184,6 +184,7 @@ struct TimelineExportView: View {
                     )
                 }
                 center.finish(activityID, message: "書き出し完了")
+                AINotifier.shared.notifyTask("書き出しが完了しました")
             } catch is CancellationError {
                 if mode == .mix { try? FileManager.default.removeItem(at: destination) }
                 center.finish(activityID, message: "書き出しをキャンセルしました")

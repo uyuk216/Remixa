@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject var project: RemixaProject
     @EnvironmentObject var timelineEngine: TimelineEngine
     @State private var showAIPanel = false
+    @ObservedObject private var chatStore = ChatStore.shared
     @State private var showClipInspector = false
     @State private var activeSheet: ContentSheet?
     @State private var isDropTargeted = false
@@ -26,6 +27,9 @@ struct ContentView: View {
         presentedContent
             .background(KeyEventHandlingView(onSpace: { timelineEngine.togglePlayPause() }))
             .background(StemSeparationFlow())
+            .onChange(of: chatStore.pendingOpenID) { _, id in
+                if id != nil { showAIPanel = true; showClipInspector = false }
+            }
     }
 
     private var presentedContent: some View {

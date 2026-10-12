@@ -7,6 +7,19 @@ import Foundation
 @MainActor
 final class AIAssistantRunner: ObservableObject {
     @Published private(set) var isRunning = false
+    /// Current progress line ("考え中…" etc.) and when the run started; both nil while idle.
+    @Published private(set) var statusText: String?
+    @Published private(set) var startedAt: Date?
+
+    private func beginProgress() {
+        startedAt = Date()
+        statusText = "考え中…"
+    }
+
+    private func clearProgress() {
+        statusText = nil
+        startedAt = nil
+    }
 
     private var process: Process?
     private var mcpConfigURL: URL?
@@ -20,10 +33,15 @@ final class AIAssistantRunner: ObservableObject {
         backend: AIBackendKind,
         executablePath: String,
         prompt: String,
-        onOutput: @escaping @MainActor @Sendable (String) -> Void,
+        onOutput userOutput: @escaping @MainActor @Sendable (String) -> Void,
         onFinish: @escaping @MainActor @Sendable (Int32) -> Void
     ) {
         cancel() // only one run at a time
+        beginProgress()
+        let onOutput: @MainActor @Sendable (String) -> Void = { [weak self] chunk in
+            self?.statusText = "応答を受信中…"
+            userOutput(chunk)
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
@@ -96,6 +114,7 @@ final class AIAssistantRunner: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.isRunning = false
+                self.clearProgress()
                 self.process = nil
                 if let configURL = self.mcpConfigURL {
                     try? FileManager.default.removeItem(at: configURL)
@@ -111,6 +130,7 @@ final class AIAssistantRunner: ObservableObject {
             try process.run()
         } catch {
             isRunning = false
+            clearProgress()
             self.process = nil
             onOutput("実行に失敗しました: \(error.localizedDescription)")
             onFinish(-1)
@@ -120,15 +140,23 @@ final class AIAssistantRunner: ObservableObject {
     /// Runs the ChatGPT backend (Responses API tool loop, no subprocess for the model itself).
     func runChatGPT(
         prompt: String,
+        conversationID: UUID? = nil,
+        prior: [ChatContextTurn] = [],
         onOutput: @escaping @MainActor @Sendable (String) -> Void,
+        onProgress: @escaping @MainActor @Sendable (ChatGPTProgress) -> Void,
         onFinish: @escaping @MainActor @Sendable (Int32) -> Void
     ) {
         cancel()
         isRunning = true
+        beginProgress()
+        let progress: @MainActor @Sendable (ChatGPTProgress) -> Void = { [weak self] event in
+            if case .status(let text) = event { self?.statusText = text }
+            onProgress(event)
+        }
         chatGPTTask = Task { [weak self] in
             var code: Int32 = 0
             do {
-                try await ChatGPTAgent.shared.run(prompt: prompt, onOutput: onOutput)
+                try await ChatGPTAgent.shared.run(prompt: prompt, conversationID: conversationID, prior: prior, onOutput: onOutput, onProgress: progress)
             } catch is CancellationError {
                 code = -15
             } catch {
@@ -137,6 +165,7 @@ final class AIAssistantRunner: ObservableObject {
                 code = 1
             }
             self?.isRunning = false
+            self?.clearProgress()
             self?.chatGPTTask = nil
             onFinish(code)
         }

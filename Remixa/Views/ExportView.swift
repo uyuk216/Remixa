@@ -76,6 +76,7 @@ struct ExportView: View {
                 await MainActor.run {
                     isExporting = false
                     didFinish = true
+                    AINotifier.shared.notifyTask("書き出しが完了しました")
                 }
             } catch {
                 await MainActor.run {

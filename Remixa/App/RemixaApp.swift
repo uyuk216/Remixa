@@ -192,10 +192,57 @@ struct SettingsView: View {
 
             Divider().padding(.vertical, 8)
 
+            NotificationSettingsSection()
+
+            Divider().padding(.vertical, 8)
+
             StemEnvironmentSettingsSection()
         }
         .padding(20)
         .frame(width: 420)
+    }
+}
+
+/// 「完了したら通知」と通知音の設定。
+struct NotificationSettingsSection: View {
+    @AppStorage(AINotifier.modeKey) private var modeRaw: String = AINotifyMode.background.rawValue
+    @AppStorage(AINotifier.soundKey) private var sound: Bool = true
+    @ObservedObject private var notifier = AINotifier.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("完了したら通知", selection: $modeRaw) {
+                ForEach(AINotifyMode.allCases) { Text($0.label).tag($0.rawValue) }
+            }
+            Toggle("通知音", isOn: $sound)
+                .toggleStyle(.switch)
+            Text("AIアシスタントの応答、書き出し、パート分離が終わったときにお知らせします。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if modeRaw != AINotifyMode.never.rawValue { permissionHint }
+        }
+        .onAppear { notifier.refreshStatus() }
+        .onChange(of: modeRaw) { _, new in
+            if new != AINotifyMode.never.rawValue, notifier.status == .notDetermined {
+                notifier.requestAuthorizationIfNeeded()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var permissionHint: some View {
+        if notifier.status == .denied {
+            HStack {
+                Text("通知が許可されていません。システム設定で許可してください。")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Button("システム設定を開く") { notifier.openSystemSettings() }
+                    .controlSize(.small)
+            }
+        } else if notifier.status == .notDetermined {
+            Button("通知を許可…") { notifier.requestAuthorizationIfNeeded() }
+                .controlSize(.small)
+        }
     }
 }
 
@@ -208,6 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // See the `Window` vs `WindowGroup` comment above: this is a second line of
         // defense against Finder-open events spawning an extra tabbed window.
         NSWindow.allowsAutomaticWindowTabbing = false
+        MainActor.assumeIsolated { AINotifier.shared.install() }
 
         // Sparkle's SUScheduledCheckInterval only checks once every 24h, so an
         // app that isn't kept running continuously could go a long time between
